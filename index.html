@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AirplaneMode — Personal Flight Tracker & Route Analytics</title>
+  <meta name="description" content="AirplaneMode is a luxury flight tracking and global route visualization web application for myflightradar24 data, fleet history, and aviation analytics.">
+  
+  <!-- Favicon icon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✈️</text></svg>">
+
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+  <!-- Main Custom Styling -->
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Top Application Header -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-logo">✈️</div>
+        <div class="brand-text">
+          <h1>AirplaneMode</h1>
+          <p>Personal Flight Intelligence & Route Analytics</p>
+        </div>
+      </div>
+
+      <!-- Live Header Quick KPIs -->
+      <div class="header-kpi-bar">
+        <div class="h-kpi">
+          <span class="kpi-label">Flights:</span>
+          <span id="stat-header-flights" class="kpi-value">0</span>
+        </div>
+        <div class="h-kpi-sep"></div>
+        <div class="h-kpi">
+          <span class="kpi-label">Distance:</span>
+          <span id="stat-header-dist" class="kpi-value">0 km</span>
+        </div>
+        <div class="h-kpi-sep"></div>
+        <div class="h-kpi">
+          <span class="kpi-label">Air Time:</span>
+          <span id="stat-header-airtime" class="kpi-value">0h</span>
+        </div>
+        <div class="h-kpi-sep"></div>
+        <div class="h-kpi">
+          <span class="kpi-label">Airports:</span>
+          <span id="stat-header-airports" class="kpi-value">0</span>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="header-actions">
+        <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Theme" onclick="window.app.toggleTheme()">
+          ☀️
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="window.app.openImportModal()">
+          📥 Import CSV
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="window.app.openAddFlightModal()">
+          ➕ Log Flight
+        </button>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs Bar -->
+    <nav class="nav-tab-bar" aria-label="Main Navigation">
+      <button class="nav-tab-btn active" data-tab="map" id="tab-btn-map">
+        🌐 Global Route Map
+      </button>
+      <button class="nav-tab-btn" data-tab="analytics" id="tab-btn-analytics">
+        📊 Flight Analytics
+      </button>
+      <button class="nav-tab-btn" data-tab="flights" id="tab-btn-flights">
+        ✈️ Flight Log & Explorer
+      </button>
+      <button class="nav-tab-btn" data-tab="aircraft" id="tab-btn-aircraft">
+        🛩️ Plane & Fleet Registry
+      </button>
+      <button class="nav-tab-btn" data-tab="io" id="tab-btn-io">
+        💾 Data & Backup
+      </button>
+    </nav>
+
+    <!-- Main View Panes Container -->
+    <main class="app-main">
+
+      <!-- ========================================== -->
+      <!-- TAB 1: Global Route Map View               -->
+      <!-- ========================================== -->
+      <section class="tab-pane active" id="tab-map">
+        <div id="flight-map-view" class="map-container"></div>
+        
+        <!-- Floating Map Options & Legend Overlay -->
+        <div class="map-floating-overlay">
+          <div class="glass-card map-control-card">
+            
+            <div class="map-card-header">
+              <div class="map-card-title">
+                <span>🌐 Route Intelligence</span>
+              </div>
+              <span id="map-active-routes-pill" class="map-routes-pill">195 Flights</span>
+            </div>
+
+            <!-- Filter by Airline Dropdown -->
+            <div class="map-control-section">
+              <span class="map-control-label">
+                <span>Filter By Airline</span>
+                <small id="map-airline-clear-btn" class="text-cyan cursor-pointer" style="display:none;" onclick="window.app.clearMapAirlineFilter()">Clear</small>
+              </span>
+              <div class="map-airline-select-wrap">
+                <select id="map-airline-select" class="map-airline-select" onchange="window.app.onMapAirlineFilterChanged(this.value)">
+                  <option value="all">✈️ All Airlines (Global)</option>
+                </select>
+                <span class="map-select-arrow">▼</span>
+              </div>
+            </div>
+
+            <!-- Route Colors Toggle -->
+            <div class="map-control-section">
+              <span class="map-control-label">Route Colors</span>
+              <div class="segmented-mode-ctrl">
+                <button class="segment-btn route-color-btn active" data-mode="airline" onclick="window.app.setRouteColorMode('airline')">
+                  🎨 Airline
+                </button>
+                <button class="segment-btn route-color-btn" data-mode="cyan" onclick="window.app.setRouteColorMode('cyan')">
+                  🔷 Neon
+                </button>
+                <button class="segment-btn route-color-btn" data-mode="frequency" onclick="window.app.setRouteColorMode('frequency')">
+                  🔥 Heatmap
+                </button>
+              </div>
+            </div>
+
+            <!-- Airport Hover Metric Mode Switcher -->
+            <div class="map-control-section">
+              <span class="map-control-label">Airport Hover Metric</span>
+              <div class="segmented-mode-ctrl">
+                <button class="segment-btn metric-mode-btn active" data-mode="detailed" onclick="window.app.setAirportMetricMode('detailed')">
+                  Dep + Arr
+                </button>
+                <button class="segment-btn metric-mode-btn" data-mode="departures" onclick="window.app.setAirportMetricMode('departures')">
+                  Departures Only
+                </button>
+              </div>
+            </div>
+
+            <!-- Map Visual Legend -->
+            <div class="map-legend-wrap">
+              <div class="map-legend-item">
+                <span class="legend-swatch hub"></span>
+                <span><strong>Gold Hub:</strong> 10+ flights (DFW, LHR, BOM)</span>
+              </div>
+              <div class="map-legend-item">
+                <span class="legend-swatch dest"></span>
+                <span><strong>Cyan Node:</strong> Destination airports</span>
+              </div>
+              <div class="map-legend-item">
+                <span class="legend-swatch thick-line"></span>
+                <span><strong>Glow Thickness:</strong> Flight frequency</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Floating Map Controls -->
+        <div class="map-bottom-controls">
+          <button class="btn btn-secondary btn-sm" onclick="window.app.map.fitAll()">
+            🎯 Center All Routes
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="window.app.switchTab('analytics')">
+            📊 View Stats
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="window.app.openAddFlightModal()">
+            ➕ Add Flight
+          </button>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 2: Deep Flight Analytics Dashboard     -->
+      <!-- ========================================== -->
+      <section class="tab-pane" id="tab-analytics">
+        <div class="page-wrapper">
+          
+          <!-- Hero KPI Cards -->
+          <div class="dashboard-hero-kpis">
+            <div class="kpi-card">
+              <div class="kpi-icon-box">🌍</div>
+              <div class="kpi-details">
+                <span class="kpi-label">Total Distance</span>
+                <span id="kpi-total-dist" class="kpi-number">0 km</span>
+                <span id="kpi-total-dist-mi" class="kpi-sub">0 miles</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-icon-box amber">⏱️</div>
+              <div class="kpi-details">
+                <span class="kpi-label">Total Air Time</span>
+                <span id="kpi-total-hours" class="kpi-number">0h 0m</span>
+                <span class="kpi-sub">Time spent flying</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-icon-box emerald">🔄</div>
+              <div class="kpi-details">
+                <span class="kpi-label">Earth Circumferences</span>
+                <span id="kpi-earth-circ" class="kpi-number">0.0x</span>
+                <span class="kpi-sub">Trips around Earth</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-icon-box purple">🌕</div>
+              <div class="kpi-details">
+                <span class="kpi-label">To The Moon</span>
+                <span id="kpi-moon-dist" class="kpi-number">0.0%</span>
+                <span class="kpi-sub">Of lunar distance</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Analytics Content Grid -->
+          <div class="analytics-grid">
+            
+            <!-- Top Carriers Breakdown -->
+            <div class="analytics-card grid-col-6">
+              <div class="card-header-row">
+                <h3>🏆 Top Airlines & Carriers</h3>
+                <span class="text-muted text-xs">By total flights</span>
+              </div>
+              <div id="analytics-top-airlines" class="airlines-list"></div>
+            </div>
+
+            <!-- Top Route Pairs -->
+            <div class="analytics-card grid-col-6">
+              <div class="card-header-row">
+                <h3>🔄 Top Route Pairs</h3>
+                <span class="text-muted text-xs">Bidirectional consolidation</span>
+              </div>
+              <div id="analytics-top-pairs" class="top-pairs-grid"></div>
+            </div>
+
+            <!-- Yearly Travel Timeline -->
+            <div class="analytics-card grid-col-12">
+              <div class="card-header-row">
+                <h3>📈 Yearly Flight Timeline & Activity</h3>
+                <span class="text-muted text-xs">Click any year to filter flight log</span>
+              </div>
+              <div id="analytics-yearly-timeline" class="yearly-chart-wrap"></div>
+            </div>
+
+            <!-- Top Visited Airports Hubs -->
+            <div class="analytics-card grid-col-6">
+              <div class="card-header-row">
+                <h3>📍 Top Visited Airports & Hubs</h3>
+                <span class="text-muted text-xs">Departures + Arrivals</span>
+              </div>
+              <div id="analytics-top-airports" class="airports-list"></div>
+            </div>
+
+            <!-- Aircraft & Fleet Distribution -->
+            <div class="analytics-card grid-col-6">
+              <div class="card-header-row">
+                <h3>🛩️ Aircraft Categories & Models</h3>
+                <span class="text-muted text-xs">Airframe types</span>
+              </div>
+              <div id="analytics-aircraft-categories" class="mb-4"></div>
+              <h4 class="text-xs text-muted uppercase font-bold mt-4 mb-2">Most Flown Models:</h4>
+              <div id="analytics-top-models" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <!-- Seat & Class Preferences -->
+            <div class="analytics-card grid-col-6">
+              <div class="card-header-row">
+                <h3>🎫 Cabin Class Distribution</h3>
+              </div>
+              <div id="analytics-cabin-classes"></div>
+            </div>
+
+            <div class="analytics-card grid-col-6">
+              <div class="card-header-row">
+                <h3>💺 Seat Position Preferences</h3>
+              </div>
+              <div id="analytics-seat-preferences"></div>
+            </div>
+
+            <!-- Flight Extremes (Longest / Shortest) -->
+            <div class="analytics-card grid-col-12">
+              <div class="card-header-row">
+                <h3>⚡ Flight Records & Extremes</h3>
+              </div>
+              <div id="analytics-flight-extremes"></div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 3: Searchable Flight Log & Explorer    -->
+      <!-- ========================================== -->
+      <section class="tab-pane" id="tab-flights">
+        <div class="page-wrapper">
+          
+          <!-- Controls & Filters Bar -->
+          <div class="flight-log-controls">
+            <div class="filter-left-group">
+              <div class="search-input-wrap">
+                <span class="search-icon">🔍</span>
+                <input 
+                  type="text" 
+                  id="flight-search-input" 
+                  class="input-search" 
+                  placeholder="Search flights, airports, airlines, notes (e.g. Honeymoon)..."
+                >
+              </div>
+
+              <select id="filter-year-select" class="select-filter" aria-label="Filter by Year">
+                <option value="all">All Years</option>
+                <option value="future">📅 Scheduled / Future</option>
+                <option value="2026">2026</option>
+                <option value="2025">2025</option>
+                <option value="2024">2024</option>
+                <option value="2023">2023</option>
+                <option value="2022">2022</option>
+                <option value="2021">2021</option>
+                <option value="2020">2020</option>
+              </select>
+
+              <select id="filter-class-select" class="select-filter" aria-label="Filter by Class">
+                <option value="all">All Classes</option>
+                <option value="1">Economy</option>
+                <option value="2">Premium Economy</option>
+                <option value="3">Business</option>
+                <option value="4">First Class</option>
+              </select>
+            </div>
+
+            <div class="filter-right-group">
+              <span id="flight-filtered-count" class="filtered-count-badge">0 flights</span>
+              <button class="btn btn-primary btn-sm" onclick="window.app.openAddFlightModal()">
+                ➕ Add Flight
+              </button>
+            </div>
+          </div>
+
+          <!-- Flight Table Container -->
+          <div class="flight-table-container">
+            <div id="flights-table-body"></div>
+            <div id="flights-pagination"></div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 4: Plane & Fleet History Registry      -->
+      <!-- ========================================== -->
+      <section class="tab-pane" id="tab-aircraft">
+        <div class="page-wrapper">
+          <div id="aircraft-registry-container"></div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- TAB 5: Data Management & CSV Import/Export -->
+      <!-- ========================================== -->
+      <section class="tab-pane" id="tab-io">
+        <div class="page-wrapper">
+          
+          <div class="io-layout">
+            <!-- CSV Importer Box -->
+            <div class="io-box">
+              <div class="io-header">
+                <h3>📥 Import Flightradar24 CSV</h3>
+                <p>Import your flight history from myflightradar24 or any compatible CSV file.</p>
+              </div>
+
+              <div class="drop-zone" id="csv-drop-zone">
+                <div class="drop-icon">📂</div>
+                <h4>Drag & Drop your CSV file here</h4>
+                <p>or click to browse local files</p>
+                <input type="file" id="csv-file-input" accept=".csv,text/csv" style="display: none;">
+              </div>
+
+              <div id="csv-import-preview" class="mt-4"></div>
+            </div>
+
+            <!-- Export & Backup Box -->
+            <div class="io-box">
+              <div class="io-header">
+                <h3>💾 Export & Backup Data</h3>
+                <p>Export your logbook in standard flightradar24 CSV format or JSON backup.</p>
+              </div>
+
+              <div class="export-buttons-group">
+                <button class="export-card-btn" onclick="window.app.exportCSV()">
+                  <div>
+                    <strong>📄 Export as myflightradar24 CSV</strong>
+                    <small>Standard format compatible with flight tracking apps</small>
+                  </div>
+                  <span>⬇️</span>
+                </button>
+
+                <button class="export-card-btn" onclick="window.app.exportJSON()">
+                  <div>
+                    <strong>📦 Export Full JSON Backup</strong>
+                    <small>Complete raw data with coordinates and analytics metadata</small>
+                  </div>
+                  <span>⬇️</span>
+                </button>
+              </div>
+
+              <!-- System Actions -->
+              <div class="system-maintenance-box">
+                <h4>Database Management</h4>
+                <div class="flex gap-2 mt-2">
+                  <button class="btn btn-secondary btn-sm" onclick="window.app.resetData()">
+                    🔄 Reload Starter Demo Data (2 Flights)
+                  </button>
+                  <button class="btn btn-danger btn-sm" onclick="window.app.clearData()">
+                    🗑️ Clear All Flights
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- MODAL: Flight Boarding Pass / Detail View                                 -->
+  <!-- ========================================================================== -->
+  <div class="modal-overlay" id="flight-detail-modal">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h3>Flight Details & Boarding Pass</h3>
+        <button class="modal-close-btn" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" id="flight-detail-content"></div>
+    </div>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- MODAL: Add / Edit Flight Form                                             -->
+  <!-- ========================================================================== -->
+  <div class="modal-overlay" id="flight-form-modal">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h3 id="flight-form-title">Log New Flight</h3>
+        <button class="modal-close-btn" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="flight-edit-form">
+          <div class="form-grid">
+            
+            <div class="form-group">
+              <label for="form-date">Flight Date *</label>
+              <input type="date" id="form-date" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+              <label for="form-flight-num">Flight Number</label>
+              <div class="flight-num-input-wrap">
+                <input type="text" id="form-flight-num" class="form-control" placeholder="e.g. AA50, BA139, 6E2113" autocomplete="off">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="window.app.triggerFlightAutofill()" title="Autofill route & aircraft from flight number">
+                  ⚡ Autofill
+                </button>
+              </div>
+              <div id="form-flight-lookup-status" class="lookup-status-badge"></div>
+            </div>
+
+            <div class="form-group autocomplete-container">
+              <label for="flight-from-input">Origin Airport (Code or City) *</label>
+              <input type="text" id="flight-from-input" class="form-control" placeholder="e.g. DFW or London Heathrow" required autocomplete="off">
+              <div id="flight-from-suggestions" class="autocomplete-dropdown"></div>
+            </div>
+
+            <div class="form-group autocomplete-container">
+              <label for="flight-to-input">Destination Airport (Code or City) *</label>
+              <input type="text" id="flight-to-input" class="form-control" placeholder="e.g. LHR or Mumbai" required autocomplete="off">
+              <div id="flight-to-suggestions" class="autocomplete-dropdown"></div>
+            </div>
+
+            <div class="form-group col-span-2">
+              <div id="form-dist-preview" class="form-dist-calc">—</div>
+            </div>
+
+            <div class="form-group">
+              <label for="form-dep-time">Departure Time (Local)</label>
+              <input type="time" id="form-dep-time" class="form-control" step="1">
+            </div>
+
+            <div class="form-group">
+              <label for="form-arr-time">Arrival Time (Local)</label>
+              <input type="time" id="form-arr-time" class="form-control" step="1">
+            </div>
+
+            <div class="form-group">
+              <label for="form-duration">Duration (HH:MM:SS)</label>
+              <input type="text" id="form-duration" class="form-control" placeholder="09:10:00">
+            </div>
+
+            <div class="form-group">
+              <label for="form-airline">Airline</label>
+              <input type="text" id="form-airline" class="form-control" placeholder="e.g. American Airlines (AA/AAL)">
+            </div>
+
+            <div class="form-group">
+              <label for="form-aircraft">Aircraft Model</label>
+              <input type="text" id="form-aircraft" class="form-control" placeholder="e.g. Boeing 777-300ER (B77W)">
+            </div>
+
+            <div class="form-group">
+              <label for="form-registration">Tail Registration</label>
+              <input type="text" id="form-registration" class="form-control" placeholder="e.g. N722AN, G-YMMJ">
+            </div>
+
+            <div class="form-group">
+              <label for="form-seat-num">Seat Number</label>
+              <input type="text" id="form-seat-num" class="form-control" placeholder="e.g. 17A, 1F">
+            </div>
+
+            <div class="form-group">
+              <label for="form-seat-type">Seat Type</label>
+              <select id="form-seat-type" class="form-control">
+                <option value="0">Unspecified</option>
+                <option value="1">Window</option>
+                <option value="2">Middle</option>
+                <option value="3">Aisle</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="form-flight-class">Cabin Class</label>
+              <select id="form-flight-class" class="form-control">
+                <option value="1">Economy</option>
+                <option value="2">Premium Economy</option>
+                <option value="3">Business Class</option>
+                <option value="4">First Class</option>
+                <option value="0">Unspecified</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="form-flight-reason">Flight Reason</label>
+              <select id="form-flight-reason" class="form-control">
+                <option value="1">Leisure / Vacation</option>
+                <option value="2">Business / Work</option>
+                <option value="3">Crew / Non-rev / Relocation</option>
+                <option value="0">Other</option>
+              </select>
+            </div>
+
+            <div class="form-group col-span-2">
+              <label for="form-note">Personal Notes & Memories</label>
+              <textarea id="form-note" class="form-control" rows="3" placeholder="e.g. Upgrade to J in flight! Great trip with family."></textarea>
+            </div>
+
+          </div>
+
+          <div class="modal-footer mt-4 flex justify-end gap-2">
+            <button type="button" class="btn btn-secondary" onclick="window.app.closeModal('flight-form-modal')">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Flight</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- MODAL: Aircraft Registration / Tail Detail View                           -->
+  <!-- ========================================================================== -->
+  <div class="modal-overlay" id="registration-modal">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h3>Airframe & Registration History</h3>
+        <button class="modal-close-btn" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" id="registration-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- MODAL: CSV Import Quick Modal                                              -->
+  <!-- ========================================================================== -->
+  <div class="modal-overlay" id="csv-import-modal">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <h3>Import Flight Data</h3>
+        <button class="modal-close-btn" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted mb-3">Upload a CSV file exported from myflightradar24 or with matching flight columns.</p>
+        <div class="drop-zone" onclick="document.getElementById('csv-file-input').click()">
+          <div class="drop-icon">📂</div>
+          <h4>Click to select CSV file</h4>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JavaScript library -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- ES6 Module Application Bundle -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
