@@ -89,6 +89,16 @@ class SkyLogApp {
     });
   }
 
+  toggleMobileMapControls(forceState) {
+    const overlay = document.getElementById('map-control-overlay');
+    if (!overlay) return;
+    if (typeof forceState === 'boolean') {
+      overlay.classList.toggle('expanded', forceState);
+    } else {
+      overlay.classList.toggle('expanded');
+    }
+  }
+
   populateMapAirlineFilter(flights) {
     const select = document.getElementById('map-airline-select');
     if (!select) return;
@@ -125,16 +135,19 @@ class SkyLogApp {
 
     const clearBtn = document.getElementById('map-airline-clear-btn');
     const pillEl = document.getElementById('map-active-routes-pill');
+    const mobilePillEl = document.getElementById('map-mobile-pill');
     const allFlights = this.store.getFlights();
 
     if (airlineVal === 'all') {
       if (clearBtn) clearBtn.style.display = 'none';
       if (pillEl) pillEl.textContent = `${allFlights.length} Flights`;
+      if (mobilePillEl) mobilePillEl.textContent = `${allFlights.length} Flights`;
       this.map.fitAll();
     } else {
       if (clearBtn) clearBtn.style.display = 'inline';
       const count = allFlights.filter(f => (f.airlineCode === airlineVal || (f.airlineRaw && f.airlineRaw.includes(airlineVal)))).length;
       if (pillEl) pillEl.textContent = `${count} Flights`;
+      if (mobilePillEl) mobilePillEl.textContent = `${count} Flights`;
       
       // Auto center map to filtered airline routes
       const activeAirports = [];

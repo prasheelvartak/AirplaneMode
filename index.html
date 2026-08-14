@@ -94,14 +94,25 @@
         <div id="flight-map-view" class="map-container"></div>
         
         <!-- Floating Map Options & Legend Overlay -->
-        <div class="map-floating-overlay">
-          <div class="glass-card map-control-card">
+        <div class="map-floating-overlay" id="map-control-overlay">
+          
+          <!-- Mobile Expand/Collapse Pill Trigger -->
+          <button class="map-mobile-toggle-btn" id="map-mobile-toggle-btn" onclick="window.app.toggleMobileMapControls()">
+            <span class="m-toggle-icon">🎛️</span>
+            <span class="m-toggle-text">Map Controls</span>
+            <span id="map-mobile-pill" class="map-routes-pill">2 Flights</span>
+          </button>
+
+          <div class="glass-card map-control-card" id="map-control-card">
             
             <div class="map-card-header">
               <div class="map-card-title">
                 <span>🌐 Route Intelligence</span>
               </div>
-              <span id="map-active-routes-pill" class="map-routes-pill">195 Flights</span>
+              <div class="flex items-center gap-2">
+                <span id="map-active-routes-pill" class="map-routes-pill">2 Flights</span>
+                <button class="map-card-close-mobile-btn" onclick="window.app.toggleMobileMapControls(false)" aria-label="Close Map Controls">✕</button>
+              </div>
             </div>
 
             <!-- Filter by Airline Dropdown -->

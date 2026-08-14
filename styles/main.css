@@ -2827,3 +2827,350 @@ html, body {
   border-radius: 2px;
   background: linear-gradient(90deg, #38bdf8, #f59e0b);
 }
+
+/* ==========================================================================
+   Mobile Toggle Button & Map Drawer
+   ========================================================================== */
+
+.map-mobile-toggle-btn {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(11, 17, 32, 0.9);
+  backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-full);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all 0.2s ease;
+}
+
+[data-theme="light"] .map-mobile-toggle-btn {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #cbd5e1;
+  color: #0f172a;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.map-mobile-toggle-btn .m-toggle-icon {
+  font-size: 14px;
+}
+
+.map-mobile-toggle-btn .mobile-toggle-pill {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+.map-card-close-mobile-btn {
+  display: none;
+}
+
+/* ==========================================================================
+   Comprehensive Mobile & Tablet Media Queries
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  .header-kpi-bar {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Header adjustments */
+  .app-header {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  .brand-section {
+    gap: 8px;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .brand-logo {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .brand-text h1 {
+    font-size: 1.05rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .brand-text p {
+    display: none !important;
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .header-actions .btn-secondary {
+    display: none !important;
+  }
+
+  .header-actions .btn-primary {
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  .theme-toggle-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  /* Navigation tab bar */
+  .nav-tab-bar {
+    padding: 6px 12px;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .nav-tab-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-tab-btn {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  /* Map View adjustments */
+  #tab-map {
+    height: calc(100vh - 100px);
+  }
+
+  .map-floating-overlay {
+    top: 10px;
+    left: 10px;
+    width: auto;
+    max-width: calc(100vw - 20px);
+  }
+
+  .map-mobile-toggle-btn {
+    display: inline-flex !important;
+  }
+
+  .map-card-close-mobile-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  [data-theme="light"] .map-card-close-mobile-btn {
+    background: rgba(0, 0, 0, 0.08);
+    color: #475569;
+  }
+
+  /* Collapsible Map Control Card on Mobile */
+  .map-control-card {
+    display: none;
+  }
+
+  .map-floating-overlay.expanded .map-control-card {
+    display: block;
+    position: absolute;
+    top: 44px;
+    left: 0;
+    width: calc(100vw - 20px);
+    max-width: 330px;
+    z-index: 600;
+    animation: fadeIn 0.2s ease forwards;
+  }
+
+  .map-bottom-controls {
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 24px);
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 10px;
+  }
+
+  .map-bottom-controls .btn {
+    padding: 6px 8px;
+    font-size: 0.72rem;
+    flex: 1;
+  }
+
+  /* Page Wrapper & Dashboard */
+  .page-wrapper {
+    padding: 14px 10px;
+  }
+
+  .dashboard-hero-kpis {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .kpi-card {
+    padding: 12px 10px;
+    gap: 8px;
+  }
+
+  .kpi-icon-box {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    border-radius: var(--radius-sm);
+  }
+
+  .kpi-number {
+    font-size: 1.05rem;
+  }
+
+  .kpi-label {
+    font-size: 0.68rem;
+  }
+
+  .kpi-sub {
+    font-size: 0.62rem;
+  }
+
+  .analytics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .grid-col-6, .grid-col-12 {
+    grid-column: span 1 / -1 !important;
+  }
+
+  .category-bars-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .donut-legend-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .yearly-chart-wrap {
+    height: 150px;
+    overflow-x: auto;
+    padding: 10px 0 5px 0;
+  }
+
+  /* Flight Log controls */
+  .flight-log-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .filter-left-group {
+    flex-direction: column;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .filter-right-group {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .search-input-wrap, .select-filter {
+    width: 100%;
+  }
+
+  .flight-table th, .flight-table td {
+    padding: 8px 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  /* Modals on Mobile */
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  .modal-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92vh !important;
+    padding: 16px 14px !important;
+    margin: 0 auto;
+    border-radius: var(--radius-md);
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .form-group.col-span-2 {
+    grid-column: span 1 !important;
+  }
+
+  .pass-route-body {
+    padding: 16px 10px;
+  }
+
+  .station-code {
+    font-size: 1.6rem;
+  }
+
+  .pass-details-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 14px 12px;
+  }
+
+  .io-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .fleet-kpis {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .fleet-kpi-chip {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+@media (max-width: 400px) {
+  .brand-text h1 {
+    font-size: 0.95rem;
+  }
+
+  .dashboard-hero-kpis {
+    grid-template-columns: 1fr;
+  }
+}
