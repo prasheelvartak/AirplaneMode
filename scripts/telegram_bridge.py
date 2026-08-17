@@ -121,27 +121,31 @@ def handle_ai_prompt(chat_id, prompt):
 
     send_message(chat_id, f"🧠 *Processing prompt with Gemini...*\n_{prompt}_")
 
-    # Call Gemini API to modify files
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    # Models to attempt in order of preference
+    models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
     
     # Read core app files
     index_html = ""
     main_css = ""
-    with open(os.path.join(WORKSPACE_DIR, "index.html"), "r", encoding="utf-8") as f:
-        index_html = f.read()
-    with open(os.path.join(WORKSPACE_DIR, "styles", "main.css"), "r", encoding="utf-8") as f:
-        main_css = f.read()
+    try:
+        with open(os.path.join(WORKSPACE_DIR, "index.html"), "r", encoding="utf-8") as f:
+            index_html = f.read()
+        with open(os.path.join(WORKSPACE_DIR, "styles", "main.css"), "r", encoding="utf-8") as f:
+            main_css = f.read()
+    except Exception as e:
+        print(f"Error reading local files: {e}")
 
     system_instruction = (
-        "You are an AI coding assistant. The user wants to update their AirplaneMode flight tracking web app. "
-        "Return a valid JSON object with the files that need updating: {\"files\": [{\"path\": \"relative/path\", \"content\": \"full updated content\"}], \"summary\": \"description of change\"}."
+        "You are an expert AI web developer modifying the AirplaneMode flight tracking web app. "
+        "Analyze the user's task and return a JSON object with the exact modified files. "
+        "Format: {\"files\": [{\"path\": \"index.html or styles/main.css or js/app.js\", \"content\": \"full updated file content\"}], \"summary\": \"Brief explanation of what was changed\"}"
     )
     
     req_body = {
         "contents": [
             {
                 "parts": [
-                    {"text": f"System: {system_instruction}\n\nTask: {prompt}\n\nCurrent index.html:\n{index_html[:4000]}...\n\nCurrent main.css:\n{main_css[:4000]}..."}
+                    {"text": f"System Context:\n{system_instruction}\n\nUser Task:\n{prompt}\n\nCurrent index.html:\n```html\n{index_html[:6000]}\n```\n\nCurrent styles/main.css:\n```css\n{main_css[:6000]}\n```"}
                 ]
             }
         ],
@@ -150,25 +154,54 @@ def handle_ai_prompt(chat_id, prompt):
         }
     }
 
+    last_error = None
+    res_data = None
+
+    for model in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+        try:
+            res = requests.post(url, json=req_body, timeout=45)
+            res_data = res.json()
+            if res.status_code == 200 and "candidates" in res_data:
+                break
+            else:
+                api_err = res_data.get("error", {}).get("message", f"HTTP {res.status_code}")
+                last_error = f"{model}: {api_err}"
+                print(f"Attempt with {model} failed: {api_err}")
+        except Exception as e:
+            last_error = str(e)
+            print(f"Error with {model}: {e}")
+
+    if not res_data or "candidates" not in res_data:
+        err_msg = res_data.get("error", {}).get("message") if res_data else last_error
+        send_message(chat_id, f"⚠️ *Gemini API Error:*\n`{err_msg or last_error}`")
+        return
+
     try:
-        res = requests.post(url, json=req_body, timeout=45)
-        res_data = res.json()
         raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
         result = json.loads(raw_text)
 
         summary = result.get("summary", "Updated files based on prompt")
         files = result.get("files", [])
         
+        if not files:
+            send_message(chat_id, f"ℹ️ *AI Response:* {summary} (No file edits required)")
+            return
+
         for file_info in files:
-            target_path = os.path.join(WORKSPACE_DIR, file_info["path"])
-            with open(target_path, "w", encoding="utf-8") as f:
-                f.write(file_info["content"])
+            rel_path = file_info.get("path", "").lstrip("/\\")
+            content = file_info.get("content", "")
+            if rel_path and content:
+                target_path = os.path.join(WORKSPACE_DIR, rel_path)
+                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                with open(target_path, "w", encoding="utf-8") as f:
+                    f.write(content)
 
         # Auto commit and push
-        handle_push_command(chat_id, f"Mobile Prompt: {prompt[:50]}")
-        send_message(chat_id, f"🎉 *Change completed:* {summary}")
+        handle_push_command(chat_id, f"Mobile: {prompt[:50]}")
+        send_message(chat_id, f"🎉 *Change completed & deployed:*\n{summary}")
     except Exception as e:
-        send_message(chat_id, f"⚠️ Error processing AI prompt: `{e}`")
+        send_message(chat_id, f"⚠️ Error applying AI changes: `{e}`")
 
 
 def handle_message(message):
