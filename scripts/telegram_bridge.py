@@ -112,7 +112,7 @@ def handle_push_command(chat_id, commit_msg="Mobile update via Telegram"):
 def get_available_gemini_model():
     """Dynamically query Google AI Studio to find supported models for this API key."""
     if not GEMINI_API_KEY:
-        return "gemini-2.0-flash"
+        return "gemini-3.6-flash"
     
     try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
@@ -128,8 +128,15 @@ def get_available_gemini_model():
                     valid_models.append(name)
             
             print(f"Available Gemini models for this key: {valid_models}")
-            # Pick best available
-            for preferred in ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
+            # Prioritize Gemini 3.x flagship models
+            for preferred in [
+                "gemini-3.6-flash",
+                "gemini-3.7-flash",
+                "gemini-3.5-flash",
+                "gemini-3.1-pro-preview",
+                "gemini-flash-latest",
+                "gemini-pro-latest"
+            ]:
                 if preferred in valid_models:
                     return preferred
             if valid_models:
@@ -137,7 +144,7 @@ def get_available_gemini_model():
     except Exception as e:
         print(f"Could not list models: {e}")
     
-    return "gemini-2.0-flash"
+    return "gemini-3.6-flash"
 
 
 def handle_ai_prompt(chat_id, prompt):
@@ -185,10 +192,10 @@ def handle_ai_prompt(chat_id, prompt):
     chosen_model = get_available_gemini_model()
     candidate_endpoints = [
         f"https://generativelanguage.googleapis.com/v1beta/models/{chosen_model}:generateContent?key={GEMINI_API_KEY}",
-        f"https://generativelanguage.googleapis.com/v1/models/{chosen_model}:generateContent?key={GEMINI_API_KEY}",
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_API_KEY}",
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}",
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key={GEMINI_API_KEY}",
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}",
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_API_KEY}"
     ]
 
     last_error = None
