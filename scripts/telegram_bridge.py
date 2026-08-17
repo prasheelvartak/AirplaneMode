@@ -109,6 +109,37 @@ def handle_push_command(chat_id, commit_msg="Mobile update via Telegram"):
         send_message(chat_id, f"❌ Push failed:\n`{p_err or p_out}`")
 
 
+def get_available_gemini_model():
+    """Dynamically query Google AI Studio to find supported models for this API key."""
+    if not GEMINI_API_KEY:
+        return "gemini-2.0-flash"
+    
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
+        res = requests.get(url, timeout=10)
+        if res.status_code == 200:
+            data = res.json()
+            models = data.get("models", [])
+            valid_models = []
+            for m in models:
+                name = m.get("name", "").replace("models/", "")
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" in methods:
+                    valid_models.append(name)
+            
+            print(f"Available Gemini models for this key: {valid_models}")
+            # Pick best available
+            for preferred in ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]:
+                if preferred in valid_models:
+                    return preferred
+            if valid_models:
+                return valid_models[0]
+    except Exception as e:
+        print(f"Could not list models: {e}")
+    
+    return "gemini-2.0-flash"
+
+
 def handle_ai_prompt(chat_id, prompt):
     """Process an AI instruction with Gemini and apply changes to codebase."""
     if not GEMINI_API_KEY:
@@ -121,9 +152,6 @@ def handle_ai_prompt(chat_id, prompt):
 
     send_message(chat_id, f"🧠 *Processing prompt with Gemini...*\n_{prompt}_")
 
-    # Models to attempt in order of preference
-    models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
-    
     # Read core app files
     index_html = ""
     main_css = ""
@@ -154,23 +182,31 @@ def handle_ai_prompt(chat_id, prompt):
         }
     }
 
+    chosen_model = get_available_gemini_model()
+    candidate_endpoints = [
+        f"https://generativelanguage.googleapis.com/v1beta/models/{chosen_model}:generateContent?key={GEMINI_API_KEY}",
+        f"https://generativelanguage.googleapis.com/v1/models/{chosen_model}:generateContent?key={GEMINI_API_KEY}",
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GEMINI_API_KEY}",
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+    ]
+
     last_error = None
     res_data = None
 
-    for model in models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+    for endpoint in candidate_endpoints:
         try:
-            res = requests.post(url, json=req_body, timeout=45)
+            res = requests.post(endpoint, json=req_body, timeout=45)
             res_data = res.json()
             if res.status_code == 200 and "candidates" in res_data:
                 break
             else:
                 api_err = res_data.get("error", {}).get("message", f"HTTP {res.status_code}")
-                last_error = f"{model}: {api_err}"
-                print(f"Attempt with {model} failed: {api_err}")
+                last_error = api_err
+                print(f"Attempt failed on {endpoint.split('?')[0]}: {api_err}")
         except Exception as e:
             last_error = str(e)
-            print(f"Error with {model}: {e}")
+            print(f"Request error: {e}")
 
     if not res_data or "candidates" not in res_data:
         err_msg = res_data.get("error", {}).get("message") if res_data else last_error
