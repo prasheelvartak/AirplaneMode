@@ -11,18 +11,28 @@ import subprocess
 import requests
 
 # --------------------------------------------------------------------------
-# Configuration
+# Configuration & Auto-load .env
 # --------------------------------------------------------------------------
+WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENV_FILE = os.path.join(WORKSPACE_DIR, ".env")
+
+if os.path.exists(ENV_FILE):
+    with open(ENV_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
 # Replace with your Telegram Bot Token from @BotFather
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE")
 
 # Optional: Set your Telegram Chat ID to restrict commands to only your phone
 ALLOWED_CHAT_ID = os.environ.get("TELEGRAM_ALLOWED_CHAT_ID", None)
 
-# Optional: Gemini API Key for autonomous code edits from phone prompts
+# Gemini API Key for autonomous code edits from phone prompts
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", None)
 
-WORKSPACE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO_URL = "https://github.com/prasheelvartak/AirplaneMode.git"
 VERCEL_URL = "https://airplane-mode.vercel.app"
 
