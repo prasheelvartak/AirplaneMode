@@ -68,8 +68,6 @@ class SkyLogApp {
       if (nativeTrigger) nativeTrigger.style.display = 'block';
     });
   }
-    this.setupAirportAutocomplete('flight-to-input', 'flight-to-suggestions');
-  }
 
   setupGlobalHandlers() {
     window.app = this;
