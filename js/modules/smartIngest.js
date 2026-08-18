@@ -338,16 +338,16 @@ export class SmartIngestEngine {
         const fn = uniqueFlightNumbers[i];
         const schedule = lookupFlightSchedule(fn);
 
-        let fromCode = distinctIatas[i * 2] || schedule?.from || (distinctIatas[0] !== distinctIatas[1] ? distinctIatas[0] : 'DFW');
-        let toCode = distinctIatas[i * 2 + 1] || schedule?.to || (distinctIatas[1] && distinctIatas[1] !== fromCode ? distinctIatas[1] : 'LHR');
+        let fromCode = schedule?.from || distinctIatas[i * 2] || distinctIatas[0] || 'DFW';
+        let toCode = schedule?.to || distinctIatas[i * 2 + 1] || distinctIatas[1] || 'LHR';
         
         if (fromCode === toCode && distinctIatas.length >= 2) {
           fromCode = distinctIatas[0];
           toCode = distinctIatas[1];
         }
 
-        const depTime = times[i * 2] || schedule?.depTime || '10:00:00';
-        const arrTime = times[i * 2 + 1] || schedule?.arrTime || '18:00:00';
+        const depTime = schedule?.depTime || times[i * 2] || '10:00:00';
+        const arrTime = schedule?.arrTime || times[i * 2 + 1] || '18:00:00';
         const date = dates[i] || dates[0] || new Date().toISOString().split('T')[0];
 
         flights.push({
