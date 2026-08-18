@@ -58,20 +58,57 @@ export class SmartIngestEngine {
       const reader = new FileReader();
       reader.onload = async () => {
         const base64Data = reader.result;
-        const key = this.getApiKey();
-        if (!key) {
-          reject(new Error('API_KEY_REQUIRED'));
-          return;
+        const mime = file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg';
+
+        // 1. Try Vercel Serverless Function /api/extract first
+        try {
+          const srvRes = await fetch('/api/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageBase64: base64Data, mimeType: mime })
+          });
+          if (srvRes.ok) {
+            const data = await srvRes.json();
+            if (data.flights && data.flights.length > 0) {
+              resolve(this.normalizeExtractedFlights(data.flights));
+              return;
+            }
+          }
+        } catch (e) {
+          // Server endpoint not available, fallback to client-side
         }
 
-        try {
-          const flights = await this.parseWithGeminiAI(null, {
-            mimeType: file.type || 'image/jpeg',
-            dataUrl: base64Data
-          });
-          resolve(flights);
-        } catch (err) {
-          reject(err);
+        // 2. Try User's Client-Side Gemini Key (if configured)
+        const key = this.getApiKey();
+        if (key) {
+          try {
+            const flights = await this.parseWithGeminiAI(null, { mimeType: mime, dataUrl: base64Data });
+            resolve(flights);
+            return;
+          } catch (err) {
+            console.warn('Client Gemini AI parse failed, falling back to in-browser OCR:', err);
+          }
+        }
+
+        // 3. In-Browser Zero-Key Optical OCR (Tesseract WebAssembly)
+        if (window.Tesseract) {
+          try {
+            const ocrResult = await window.Tesseract.recognize(base64Data, 'eng');
+            const ocrText = ocrResult?.data?.text || '';
+            if (ocrText.trim().length > 0) {
+              const flights = this.parseWithHeuristics(ocrText);
+              resolve(flights);
+              return;
+            }
+          } catch (ocrErr) {
+            console.warn('Tesseract OCR error:', ocrErr);
+          }
+        }
+
+        if (!key) {
+          reject(new Error('API_KEY_REQUIRED'));
+        } else {
+          reject(new Error('Could not detect flight details from this screenshot.'));
         }
       };
       reader.onerror = () => reject(new Error('Failed to read image file.'));
@@ -87,19 +124,42 @@ export class SmartIngestEngine {
       const reader = new FileReader();
       reader.onload = async () => {
         const textContent = reader.result;
-        // Search for text inside PDF chunks
         const cleanText = textContent.replace(/[^\x20-\x7E\n\r]/g, ' ');
+
+        // 1. Try Vercel Serverless Function
+        try {
+          const srvRes = await fetch('/api/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: cleanText })
+          });
+          if (srvRes.ok) {
+            const data = await srvRes.json();
+            if (data.flights && data.flights.length > 0) {
+              resolve(this.normalizeExtractedFlights(data.flights));
+              return;
+            }
+          }
+        } catch (e) {}
+
+        // 2. Try User's Client Gemini Key
         const key = this.getApiKey();
-        
         if (key) {
           try {
             const flights = await this.parseWithGeminiAI(cleanText, null);
             resolve(flights);
+            return;
           } catch (e) {
             resolve(this.parseWithHeuristics(cleanText));
+            return;
           }
-        } else {
+        }
+
+        // 3. Fast Heuristic Parser
+        try {
           resolve(this.parseWithHeuristics(cleanText));
+        } catch (err) {
+          reject(err);
         }
       };
       reader.onerror = () => reject(new Error('Failed to read PDF file.'));
@@ -108,15 +168,23 @@ export class SmartIngestEngine {
   }
 
   /**
-   * Call Gemini 2.0 / 1.5 Flash Vision / Text API
+   * Call Gemini API with dynamic model discovery & robust fallbacks
    */
   async parseWithGeminiAI(textPrompt, imageObj) {
     const key = this.getApiKey();
     if (!key) throw new Error('No Gemini API key provided');
 
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-    const parts = [];
+    // Dynamically discover supported models or try modern flash tier
+    const candidateModels = [
+      'gemini-2.5-flash',
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
+      'gemini-flash-latest',
+      'gemini-2.0-flash',
+      'gemini-pro-latest'
+    ];
 
+    const parts = [];
     const systemPrompt = `
       You are an expert flight itinerary and boarding pass parser.
       Extract ALL flight segments from the provided text or image into a clean JSON array.
@@ -142,7 +210,7 @@ export class SmartIngestEngine {
       const base64Pure = imageObj.dataUrl.split(',')[1];
       parts.push({
         inline_data: {
-          mime_type: imageObj.mimeType,
+          mime_type: imageObj.mimeType || 'image/jpeg',
           data: base64Pure
         }
       });
@@ -152,7 +220,7 @@ export class SmartIngestEngine {
     }
 
     let lastErr = null;
-    for (const model of models) {
+    for (const model of candidateModels) {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
       try {
         const res = await fetch(url, {
