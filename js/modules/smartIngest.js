@@ -169,44 +169,25 @@ export class SmartIngestEngine {
   }
 
   /**
-   * Call Gemini API with dynamic model discovery & robust fallbacks
+   * Call Gemini API with prioritized modern models & multimodal vision
    */
   async parseWithGeminiAI(textPrompt, imageObj) {
     const key = this.getApiKey();
     if (!key) throw new Error('No Gemini API key provided');
 
-    // 1. Dynamically query supported models for this exact API key from Google
-    let candidateModels = [];
-    try {
-      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
-      if (listRes.ok) {
-        const listData = await listRes.json();
-        if (listData.models && Array.isArray(listData.models)) {
-          candidateModels = listData.models
-            .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
-            .map(m => m.name.replace(/^models\//, ''))
-            .filter(m => m.includes('flash') || m.includes('pro'));
-        }
-      }
-    } catch (e) {
-      console.warn('Could not query model list:', e);
-    }
-
-    if (candidateModels.length === 0) {
-      candidateModels = [
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
-        'gemini-2.5-flash',
-        'gemini-1.5-pro',
-        'gemini-pro'
-      ];
-    }
+    const candidateModels = [
+      'gemini-2.5-flash',
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
+      'gemini-flash-latest',
+      'gemini-2.0-flash',
+      'gemini-pro-latest'
+    ];
 
     const parts = [];
     const systemPrompt = `
       You are an expert flight itinerary and boarding pass parser.
-      Extract ONLY actual flight segments from the provided text or image into a clean JSON array.
-      If it is a single flight or boarding pass, return an array with EXACTLY 1 flight object.
+      Extract ALL flight segments from the provided text or image into a clean JSON array.
       Schema for each flight segment:
       {
         "date": "YYYY-MM-DD",
