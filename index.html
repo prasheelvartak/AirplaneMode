@@ -2,10 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>AirplaneMode — Personal Flight Tracker & Route Analytics</title>
   <meta name="description" content="AirplaneMode is a luxury flight tracking and global route visualization web application for myflightradar24 data, fleet history, and aviation analytics.">
   
+  <!-- PWA Manifest & Theme Color -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0b1120">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AirplaneMode">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
   <!-- Favicon icon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✈️</text></svg>">
 
@@ -53,11 +62,14 @@
 
       <!-- Action Buttons -->
       <div class="header-actions">
+        <button id="pwa-install-btn" class="btn btn-secondary btn-sm pwa-install-btn" title="Install AirplaneMode to Home Screen" onclick="window.app.openPwaInstallModal()">
+          📲 Install
+        </button>
+        <button class="btn btn-smart btn-sm" title="Smart Ingest from Email, PDF or Screenshot" onclick="window.app.openSmartIngestModal()">
+          🪄 Smart Ingest
+        </button>
         <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Theme" onclick="window.app.toggleTheme()">
           ☀️
-        </button>
-        <button class="btn btn-secondary btn-sm" onclick="window.app.openImportModal()">
-          📥 Import CSV
         </button>
         <button class="btn btn-primary btn-sm" onclick="window.app.openAddFlightModal()">
           ➕ Log Flight
@@ -386,6 +398,75 @@
         <div class="page-wrapper">
           
           <div class="io-layout">
+            <!-- Smart Ingestion Engine Box (Emails, PDFs, Screenshots) -->
+            <div class="io-box io-box-featured">
+              <div class="io-header">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3>🪄 Smart Flight Ingest (AI Assisted)</h3>
+                    <p>Extract flights automatically from booking emails, PDF boarding passes, or mobile app screenshots (PNG/JPEG).</p>
+                  </div>
+                  <span class="smart-tag-pill">✨ Auto-Extract</span>
+                </div>
+              </div>
+
+              <!-- Ingestion Input Mode Tabs -->
+              <div class="smart-mode-tabs mb-3">
+                <button class="smart-tab-btn active" data-smart-mode="image" onclick="window.app.setSmartIngestMode('image')">
+                  📸 Screenshot (PNG/JPG)
+                </button>
+                <button class="smart-tab-btn" data-smart-mode="pdf" onclick="window.app.setSmartIngestMode('pdf')">
+                  📄 PDF E-Ticket
+                </button>
+                <button class="smart-tab-btn" data-smart-mode="text" onclick="window.app.setSmartIngestMode('text')">
+                  📝 Paste Email Text
+                </button>
+              </div>
+
+              <!-- Mode 1 & 2: Image / PDF Dropzone -->
+              <div id="smart-file-zone" class="drop-zone smart-dropzone">
+                <div class="drop-icon" id="smart-drop-icon">📸</div>
+                <h4 id="smart-drop-title">Drop Screenshot or PDF here</h4>
+                <p id="smart-drop-sub">or click to choose from camera / photos / files</p>
+                <input type="file" id="smart-file-input" accept="image/png,image/jpeg,image/webp,application/pdf" style="display: none;">
+                
+                <!-- Live File / Image Preview -->
+                <div id="smart-file-preview" class="smart-file-preview" style="display: none;">
+                  <img id="smart-preview-img" src="" alt="Screenshot Preview" style="display: none;">
+                  <div id="smart-preview-info" class="smart-preview-info"></div>
+                  <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="window.app.clearSmartFile(event)">Remove</button>
+                </div>
+              </div>
+
+              <!-- Mode 3: Raw Text Paste -->
+              <div id="smart-text-zone" class="smart-text-zone" style="display: none;">
+                <textarea id="smart-text-input" class="form-control" rows="5" placeholder="Paste your airline confirmation email or booking receipt text here... (e.g. American Airlines confirmation for AA50 from DFW to LHR on June 15...)"></textarea>
+              </div>
+
+              <!-- Parse Action Row -->
+              <div class="smart-action-row mt-3 flex items-center justify-between">
+                <button id="smart-parse-btn" class="btn btn-smart" onclick="window.app.runSmartIngest()">
+                  ✨ Extract Flight Details
+                </button>
+                <small class="text-muted cursor-pointer" onclick="window.app.toggleGeminiKeyPrompt()">⚙️ Gemini Key Settings</small>
+              </div>
+
+              <!-- Optional Gemini Key input -->
+              <div id="smart-key-config" class="smart-key-config mt-3" style="display: none;">
+                <div class="form-group">
+                  <label for="smart-gemini-key-input" class="text-dim text-xs">Google Gemini API Key (Optional — for deep screenshot parsing)</label>
+                  <div class="flex gap-2">
+                    <input type="password" id="smart-gemini-key-input" class="form-control" placeholder="AIzaSy...">
+                    <button class="btn btn-secondary btn-sm" onclick="window.app.saveGeminiKey()">Save</button>
+                  </div>
+                  <small class="text-muted text-xs">Free key from <a href="https://aistudio.google.com/apikey" target="_blank" class="text-cyan">Google AI Studio</a>. Saved locally in your browser.</small>
+                </div>
+              </div>
+
+              <!-- Extracted Flights Review Container -->
+              <div id="smart-extracted-results" class="smart-extracted-results mt-4" style="display: none;"></div>
+            </div>
+
             <!-- CSV Importer Box -->
             <div class="io-box">
               <div class="io-header">
@@ -618,6 +699,107 @@
           <div class="drop-icon">📂</div>
           <h4>Click to select CSV file</h4>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- MODAL: Smart Ingest Modal (Quick Popup)                                    -->
+  <!-- ========================================================================== -->
+  <div class="modal-overlay" id="smart-ingest-modal">
+    <div class="modal-box modal-wide">
+      <div class="modal-header">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🪄</span>
+          <h3>Smart Flight Ingest</h3>
+        </div>
+        <button class="modal-close-btn" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body" id="smart-ingest-modal-body">
+        <p class="text-muted text-sm mb-3">Drop an airline confirmation screenshot (PNG/JPG), PDF e-ticket, or paste confirmation text.</p>
+        
+        <!-- Input Tabs -->
+        <div class="smart-mode-tabs mb-3">
+          <button class="smart-tab-btn active" data-smart-modal-mode="image" onclick="window.app.setSmartModalMode('image')">
+            📸 Screenshot
+          </button>
+          <button class="smart-tab-btn" data-smart-modal-mode="pdf" onclick="window.app.setSmartModalMode('pdf')">
+            📄 PDF E-Ticket
+          </button>
+          <button class="smart-tab-btn" data-smart-modal-mode="text" onclick="window.app.setSmartModalMode('text')">
+            📝 Paste Text
+          </button>
+        </div>
+
+        <div id="smart-modal-file-zone" class="drop-zone smart-dropzone">
+          <div class="drop-icon">📸</div>
+          <h4>Drop Screenshot or PDF here</h4>
+          <p>or click to browse photos & files</p>
+          <input type="file" id="smart-modal-file-input" accept="image/png,image/jpeg,image/webp,application/pdf" style="display: none;">
+          
+          <div id="smart-modal-preview" class="smart-file-preview" style="display: none;">
+            <img id="smart-modal-preview-img" src="" alt="Screenshot Preview" style="display: none;">
+            <div id="smart-modal-preview-info" class="smart-preview-info"></div>
+          </div>
+        </div>
+
+        <div id="smart-modal-text-zone" class="smart-text-zone" style="display: none;">
+          <textarea id="smart-modal-text-input" class="form-control" rows="5" placeholder="Paste booking confirmation email text..."></textarea>
+        </div>
+
+        <div class="mt-3 flex items-center justify-between">
+          <button id="smart-modal-parse-btn" class="btn btn-smart" onclick="window.app.runSmartModalIngest()">
+            ✨ Extract Flights
+          </button>
+          <small class="text-muted cursor-pointer" onclick="window.app.switchTab('io')">⚙️ Advanced Settings</small>
+        </div>
+
+        <div id="smart-modal-extracted-results" class="smart-extracted-results mt-4" style="display: none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================== -->
+  <!-- MODAL: PWA Install to Home Screen Helper                                   -->
+  <!-- ========================================================================== -->
+  <div class="modal-overlay" id="pwa-install-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">✈️</span>
+          <h3>Install AirplaneMode App</h3>
+        </div>
+        <button class="modal-close-btn" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="pwa-install-guide">
+          
+          <!-- iOS Instructions -->
+          <div class="pwa-guide-card">
+            <h4>🍏 iPhone & iPad (Safari)</h4>
+            <ol class="pwa-steps-list">
+              <li>Tap the <strong>Share</strong> button <span class="share-icon-badge">⬆️</span> at the bottom of Safari.</li>
+              <li>Scroll down and tap <strong>Add to Home Screen</strong> <span class="share-icon-badge">➕</span>.</li>
+              <li>Tap <strong>Add</strong> in the top right.</li>
+            </ol>
+          </div>
+
+          <!-- Android Instructions -->
+          <div class="pwa-guide-card mt-3">
+            <h4>🤖 Android (Chrome) & Desktop</h4>
+            <ol class="pwa-steps-list">
+              <li>Tap the <strong>three dots (⋮)</strong> menu in Chrome.</li>
+              <li>Tap <strong>Install App</strong> or <strong>Add to Home Screen</strong>.</li>
+            </ol>
+            <button id="pwa-native-install-trigger" class="btn btn-primary w-full mt-3" onclick="window.app.triggerNativePwaInstall()" style="display: none;">
+              📲 1-Click Install
+            </button>
+          </div>
+
+        </div>
+      </div>
+      <div class="modal-footer mt-3 flex justify-end">
+        <button class="btn btn-secondary" onclick="window.app.closeModal('pwa-install-modal')">Got it</button>
       </div>
     </div>
   </div>

@@ -3174,3 +3174,187 @@ html, body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   Smart Ingestion Engine (AI-Assisted Email/PDF/Screenshot Parsing)
+   ========================================================================== */
+
+.btn-smart {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-smart:hover {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.45);
+  transform: translateY(-1px);
+}
+
+.io-box-featured {
+  border: 1px solid rgba(139, 92, 246, 0.3) !important;
+  box-shadow: 0 8px 24px -10px rgba(99, 102, 241, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.io-box-featured::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1, #38bdf8, #f59e0b);
+}
+
+.smart-tag-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #a78bfa;
+  border-radius: var(--radius-full);
+}
+
+.smart-mode-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 3px;
+  border-radius: 10px;
+  gap: 3px;
+}
+
+[data-theme="light"] .smart-mode-tabs {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.smart-tab-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.smart-tab-btn:hover {
+  color: var(--text-main);
+}
+
+.smart-tab-btn.active {
+  background: #1e293b;
+  color: #38bdf8;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  font-weight: 700;
+}
+
+[data-theme="light"] .smart-tab-btn.active {
+  background: #ffffff;
+  color: #0284c7;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.smart-dropzone {
+  position: relative;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.smart-file-preview {
+  margin-top: 10px;
+  width: 100%;
+  text-align: center;
+}
+
+.smart-file-preview img {
+  max-width: 180px;
+  max-height: 120px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-glow);
+  margin: 0 auto 8px auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  object-fit: cover;
+}
+
+.smart-preview-info {
+  font-size: 0.78rem;
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.smart-results-card {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] .smart-results-card {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.smart-flight-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.station-code-sm {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+}
+
+/* ==========================================================================
+   PWA Installation Guide Modal
+   ========================================================================== */
+
+.pwa-install-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pwa-guide-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+}
+
+.pwa-guide-card h4 {
+  font-size: 0.92rem;
+  color: var(--text-heading);
+  margin-bottom: 8px;
+}
+
+.pwa-steps-list {
+  padding-left: 20px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.share-icon-badge {
+  display: inline-block;
+  padding: 1px 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}

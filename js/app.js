@@ -1,11 +1,9 @@
-/**
- * SkyLog / AeroTrack Pro Main Application Coordinator
- */
 import { store } from './modules/storage.js';
 import { FlightMap } from './modules/map.js';
 import { calculateFlightStats } from './modules/stats.js';
 import { FlightLogManager } from './modules/flights.js';
 import { AircraftRegistryView } from './modules/aircraftView.js';
+import { SmartIngestEngine } from './modules/smartIngest.js';
 import { parseFlightradarCSV, exportToFlightradarCSV, SEAT_TYPES, FLIGHT_CLASSES, FLIGHT_REASONS } from './modules/parser.js';
 import { AIRPORTS, getAirport, calculateDistance, extractAirportCode } from './data/airports.js';
 import { AIRLINES, AIRCRAFT_MODELS, KNOWN_REGISTRATIONS, getAircraftInfo, extractAircraftCode, extractAirlineCode } from './data/aircraft.js';
@@ -18,8 +16,12 @@ class SkyLogApp {
     this.map = new FlightMap('flight-map-view');
     this.flightManager = new FlightLogManager('flights-table-body', 'flights-pagination', this.store);
     this.aircraftView = new AircraftRegistryView('aircraft-registry-container');
+    this.smartIngest = new SmartIngestEngine(this.store, this);
     
     this.editingFlightId = null;
+    this.deferredPwaPrompt = null;
+    this.activeSmartFile = null;
+    this.activeSmartModalFile = null;
     this.setupGlobalHandlers();
   }
 
@@ -43,6 +45,29 @@ class SkyLogApp {
     // Setup DOM Event Listeners
     this.attachEventListeners();
     this.setupAirportAutocomplete('flight-from-input', 'flight-from-suggestions');
+    this.setupAirportAutocomplete('flight-to-input', 'flight-to-suggestions');
+    this.setupFlightNumberAutofill();
+    this.setupSmartIngestDropzones();
+
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(reg => {
+          console.log('AirplaneMode PWA ServiceWorker registered');
+        }).catch(err => {
+          console.warn('PWA SW registration note:', err);
+        });
+      });
+    }
+
+    // PWA Install prompt listener
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      this.deferredPwaPrompt = e;
+      const nativeTrigger = document.getElementById('pwa-native-install-trigger');
+      if (nativeTrigger) nativeTrigger.style.display = 'block';
+    });
+  }
     this.setupAirportAutocomplete('flight-to-input', 'flight-to-suggestions');
   }
 
@@ -1163,10 +1188,346 @@ class SkyLogApp {
       });
     });
   }
+
+  // =========================================================================
+  // Smart Ingestion Handlers (Screenshots, PDFs, Pasted Emails)
+  // =========================================================================
+
+  openSmartIngestModal() {
+    const modal = document.getElementById('smart-ingest-modal');
+    if (modal) {
+      this.clearSmartModalFile();
+      const resContainer = document.getElementById('smart-modal-extracted-results');
+      if (resContainer) resContainer.style.display = 'none';
+      modal.classList.add('active');
+    }
+  }
+
+  openPwaInstallModal() {
+    const modal = document.getElementById('pwa-install-modal');
+    if (modal) modal.classList.add('active');
+  }
+
+  triggerNativePwaInstall() {
+    if (this.deferredPwaPrompt) {
+      this.deferredPwaPrompt.prompt();
+      this.deferredPwaPrompt.userChoice.then(choice => {
+        if (choice.outcome === 'accepted') {
+          this.closeModal('pwa-install-modal');
+        }
+        this.deferredPwaPrompt = null;
+      });
+    }
+  }
+
+  setupSmartIngestDropzones() {
+    // 1. In Tab IO
+    const smartZone = document.getElementById('smart-file-zone');
+    const smartInput = document.getElementById('smart-file-input');
+    if (smartZone && smartInput) {
+      smartZone.addEventListener('click', (e) => {
+        if (e.target.tagName !== 'BUTTON') smartInput.click();
+      });
+      smartInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          this.handleSmartFileSelected(e.target.files[0], 'io');
+        }
+      });
+      smartZone.addEventListener('dragover', (e) => { e.preventDefault(); smartZone.classList.add('drag-over'); });
+      smartZone.addEventListener('dragleave', () => smartZone.classList.remove('drag-over'));
+      smartZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        smartZone.classList.remove('drag-over');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          this.handleSmartFileSelected(e.dataTransfer.files[0], 'io');
+        }
+      });
+    }
+
+    // 2. In Modal
+    const modalZone = document.getElementById('smart-modal-file-zone');
+    const modalInput = document.getElementById('smart-modal-file-input');
+    if (modalZone && modalInput) {
+      modalZone.addEventListener('click', (e) => {
+        if (e.target.tagName !== 'BUTTON') modalInput.click();
+      });
+      modalInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          this.handleSmartFileSelected(e.target.files[0], 'modal');
+        }
+      });
+      modalZone.addEventListener('dragover', (e) => { e.preventDefault(); modalZone.classList.add('drag-over'); });
+      modalZone.addEventListener('dragleave', () => modalZone.classList.remove('drag-over'));
+      modalZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        modalZone.classList.remove('drag-over');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          this.handleSmartFileSelected(e.dataTransfer.files[0], 'modal');
+        }
+      });
+    }
+  }
+
+  setSmartIngestMode(mode) {
+    document.querySelectorAll('.smart-mode-tabs .smart-tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.smartMode === mode);
+    });
+    const fileZone = document.getElementById('smart-file-zone');
+    const textZone = document.getElementById('smart-text-zone');
+    const dropIcon = document.getElementById('smart-drop-icon');
+    const dropTitle = document.getElementById('smart-drop-title');
+    const dropSub = document.getElementById('smart-drop-sub');
+    const fileInput = document.getElementById('smart-file-input');
+
+    if (mode === 'text') {
+      if (fileZone) fileZone.style.display = 'none';
+      if (textZone) textZone.style.display = 'block';
+    } else {
+      if (fileZone) fileZone.style.display = 'block';
+      if (textZone) textZone.style.display = 'none';
+      if (mode === 'image') {
+        if (dropIcon) dropIcon.textContent = '📸';
+        if (dropTitle) dropTitle.textContent = 'Drop Screenshot (PNG/JPG) here';
+        if (dropSub) dropSub.textContent = 'or take a photo / select from photo library';
+        if (fileInput) fileInput.accept = 'image/png,image/jpeg,image/webp';
+      } else {
+        if (dropIcon) dropIcon.textContent = '📄';
+        if (dropTitle) dropTitle.textContent = 'Drop PDF E-Ticket or Boarding Pass here';
+        if (dropSub) dropSub.textContent = 'or click to browse PDF files';
+        if (fileInput) fileInput.accept = 'application/pdf';
+      }
+    }
+  }
+
+  setSmartModalMode(mode) {
+    document.querySelectorAll('#smart-ingest-modal .smart-tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.smartModalMode === mode);
+    });
+    const fileZone = document.getElementById('smart-modal-file-zone');
+    const textZone = document.getElementById('smart-modal-text-zone');
+    const fileInput = document.getElementById('smart-modal-file-input');
+
+    if (mode === 'text') {
+      if (fileZone) fileZone.style.display = 'none';
+      if (textZone) textZone.style.display = 'block';
+    } else {
+      if (fileZone) fileZone.style.display = 'block';
+      if (textZone) textZone.style.display = 'none';
+      if (fileInput) fileInput.accept = mode === 'image' ? 'image/png,image/jpeg,image/webp' : 'application/pdf';
+    }
+  }
+
+  handleSmartFileSelected(file, context = 'io') {
+    if (!file) return;
+    if (context === 'io') {
+      this.activeSmartFile = file;
+      const preview = document.getElementById('smart-file-preview');
+      const imgEl = document.getElementById('smart-preview-img');
+      const infoEl = document.getElementById('smart-preview-info');
+
+      if (preview) preview.style.display = 'block';
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (imgEl) { imgEl.src = e.target.result; imgEl.style.display = 'block'; }
+          if (infoEl) infoEl.textContent = `📸 ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
+        };
+        reader.readAsDataURL(file);
+      } else {
+        if (imgEl) imgEl.style.display = 'none';
+        if (infoEl) infoEl.textContent = `📄 ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
+      }
+    } else {
+      this.activeSmartModalFile = file;
+      const preview = document.getElementById('smart-modal-preview');
+      const imgEl = document.getElementById('smart-modal-preview-img');
+      const infoEl = document.getElementById('smart-modal-preview-info');
+
+      if (preview) preview.style.display = 'block';
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (imgEl) { imgEl.src = e.target.result; imgEl.style.display = 'block'; }
+          if (infoEl) infoEl.textContent = `📸 ${file.name}`;
+        };
+        reader.readAsDataURL(file);
+      } else {
+        if (imgEl) imgEl.style.display = 'none';
+        if (infoEl) infoEl.textContent = `📄 ${file.name}`;
+      }
+    }
+  }
+
+  clearSmartFile(e) {
+    if (e) e.stopPropagation();
+    this.activeSmartFile = null;
+    const preview = document.getElementById('smart-file-preview');
+    const input = document.getElementById('smart-file-input');
+    if (preview) preview.style.display = 'none';
+    if (input) input.value = '';
+  }
+
+  clearSmartModalFile() {
+    this.activeSmartModalFile = null;
+    const preview = document.getElementById('smart-modal-preview');
+    const input = document.getElementById('smart-modal-file-input');
+    if (preview) preview.style.display = 'none';
+    if (input) input.value = '';
+  }
+
+  async runSmartIngest() {
+    const btn = document.getElementById('smart-parse-btn');
+    const resultsContainer = document.getElementById('smart-extracted-results');
+    const activeTab = document.querySelector('.smart-mode-tabs .smart-tab-btn.active')?.dataset.smartMode || 'image';
+
+    if (btn) { btn.disabled = true; btn.textContent = '🧠 Extracting flight details...'; }
+    if (resultsContainer) { resultsContainer.style.display = 'block'; resultsContainer.innerHTML = '<div class="text-center p-3 text-cyan">Scanning itinerary & extracting flight segments...</div>'; }
+
+    try {
+      let extracted = [];
+      if (activeTab === 'text') {
+        const textVal = document.getElementById('smart-text-input')?.value || '';
+        extracted = await this.smartIngest.parseText(textVal);
+      } else if (activeTab === 'image') {
+        if (!this.activeSmartFile) throw new Error('Please select or drop a flight screenshot (PNG/JPEG) first.');
+        extracted = await this.smartIngest.parseImageFile(this.activeSmartFile);
+      } else {
+        if (!this.activeSmartFile) throw new Error('Please select or drop a PDF e-ticket first.');
+        extracted = await this.smartIngest.parsePdfFile(this.activeSmartFile);
+      }
+
+      this.currentSmartExtracted = extracted;
+      this.renderSmartResults(extracted, 'smart-extracted-results');
+    } catch (err) {
+      if (resultsContainer) {
+        resultsContainer.innerHTML = `<div class="alert alert-danger">⚠️ ${err.message}</div>`;
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '✨ Extract Flight Details'; }
+    }
+  }
+
+  async runSmartModalIngest() {
+    const btn = document.getElementById('smart-modal-parse-btn');
+    const resultsContainer = document.getElementById('smart-modal-extracted-results');
+    const activeTab = document.querySelector('#smart-ingest-modal .smart-tab-btn.active')?.dataset.smartModalMode || 'image';
+
+    if (btn) { btn.disabled = true; btn.textContent = '🧠 Extracting...'; }
+    if (resultsContainer) { resultsContainer.style.display = 'block'; resultsContainer.innerHTML = '<div class="text-center p-3 text-cyan">Parsing flight details...</div>'; }
+
+    try {
+      let extracted = [];
+      if (activeTab === 'text') {
+        const textVal = document.getElementById('smart-modal-text-input')?.value || '';
+        extracted = await this.smartIngest.parseText(textVal);
+      } else if (activeTab === 'image') {
+        if (!this.activeSmartModalFile) throw new Error('Please choose a screenshot first.');
+        extracted = await this.smartIngest.parseImageFile(this.activeSmartModalFile);
+      } else {
+        if (!this.activeSmartModalFile) throw new Error('Please choose a PDF e-ticket first.');
+        extracted = await this.smartIngest.parsePdfFile(this.activeSmartModalFile);
+      }
+
+      this.currentSmartExtracted = extracted;
+      this.renderSmartResults(extracted, 'smart-modal-extracted-results');
+    } catch (err) {
+      if (resultsContainer) {
+        resultsContainer.innerHTML = `<div class="alert alert-danger">⚠️ ${err.message}</div>`;
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '✨ Extract Flights'; }
+    }
+  }
+
+  renderSmartResults(flights, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!flights || flights.length === 0) {
+      container.innerHTML = `<div class="alert alert-danger">No flights detected.</div>`;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="smart-results-card">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="text-white font-bold">🎉 Detected ${flights.length} Flight Segment${flights.length > 1 ? 's' : ''}</h4>
+          <button class="btn btn-primary btn-sm" onclick="window.app.confirmAllSmartFlights('${containerId}')">
+            ✅ Add ${flights.length} Flight${flights.length > 1 ? 's' : ''} to Logbook
+          </button>
+        </div>
+
+        <div class="smart-flights-list">
+          ${flights.map((f, idx) => `
+            <div class="smart-flight-item glass-card mb-2 p-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="airline-badge font-bold">${f.airlineCode || '✈️'}</span>
+                  <strong>${f.flightNumber}</strong>
+                  <span class="text-muted text-xs">• ${f.date}</span>
+                </div>
+                <span class="badge class-eco">${f.flightClass === 3 ? 'Business' : f.flightClass === 4 ? 'First' : 'Economy'}</span>
+              </div>
+              <div class="smart-route-row flex items-center gap-3 my-2">
+                <span class="station-code-sm font-bold text-cyan">${f.fromCode}</span>
+                <span class="route-arrow text-amber">✈️ ➔</span>
+                <span class="station-code-sm font-bold text-cyan">${f.toCode}</span>
+                <span class="text-xs text-muted">(${f.distanceKm.toLocaleString()} km)</span>
+              </div>
+              <div class="flex items-center justify-between text-xs text-muted">
+                <span>⏱️ ${f.depTime || '—'} ➔ ${f.arrTime || '—'}</span>
+                <span>💺 Seat: <strong>${f.seatNumber || '—'}</strong></span>
+                <span>🛩️ ${f.aircraftRaw || 'Airbus/Boeing'}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  confirmAllSmartFlights(containerId) {
+    if (!this.currentSmartExtracted || this.currentSmartExtracted.length === 0) return;
+    const count = this.smartIngest.importFlights(this.currentSmartExtracted);
+    alert(`🎉 Successfully added ${count} flight${count > 1 ? 's' : ''} to your AirplaneMode logbook!`);
+    
+    // Close modal if open
+    this.closeModal('smart-ingest-modal');
+    
+    // Clear container
+    const container = document.getElementById(containerId);
+    if (container) container.style.display = 'none';
+
+    // Switch to flight log or map to view
+    this.switchTab('flights');
+  }
+
+  toggleGeminiKeyPrompt() {
+    const configEl = document.getElementById('smart-key-config');
+    const input = document.getElementById('smart-gemini-key-input');
+    if (configEl) {
+      const isVisible = configEl.style.display === 'block';
+      configEl.style.display = isVisible ? 'none' : 'block';
+      if (!isVisible && input) {
+        input.value = this.smartIngest.getApiKey();
+      }
+    }
+  }
+
+  saveGeminiKey() {
+    const input = document.getElementById('smart-gemini-key-input');
+    if (input) {
+      this.smartIngest.setApiKey(input.value);
+      alert('✅ Gemini API Key saved locally in your browser!');
+      const configEl = document.getElementById('smart-key-config');
+      if (configEl) configEl.style.display = 'none';
+    }
+  }
 }
 
 // Instantiate on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
   const app = new SkyLogApp();
+  window.app = app;
   app.init();
 });
