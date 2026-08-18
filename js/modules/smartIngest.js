@@ -175,20 +175,38 @@ export class SmartIngestEngine {
     const key = this.getApiKey();
     if (!key) throw new Error('No Gemini API key provided');
 
-    // Dynamically discover supported models or try modern flash tier
-    const candidateModels = [
-      'gemini-2.5-flash',
-      'gemini-3.6-flash',
-      'gemini-3.7-flash',
-      'gemini-flash-latest',
-      'gemini-2.0-flash',
-      'gemini-pro-latest'
-    ];
+    // 1. Dynamically query supported models for this exact API key from Google
+    let candidateModels = [];
+    try {
+      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        if (listData.models && Array.isArray(listData.models)) {
+          candidateModels = listData.models
+            .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+            .map(m => m.name.replace(/^models\//, ''))
+            .filter(m => m.includes('flash') || m.includes('pro'));
+        }
+      }
+    } catch (e) {
+      console.warn('Could not query model list:', e);
+    }
+
+    if (candidateModels.length === 0) {
+      candidateModels = [
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-2.5-flash',
+        'gemini-1.5-pro',
+        'gemini-pro'
+      ];
+    }
 
     const parts = [];
     const systemPrompt = `
       You are an expert flight itinerary and boarding pass parser.
-      Extract ALL flight segments from the provided text or image into a clean JSON array.
+      Extract ONLY actual flight segments from the provided text or image into a clean JSON array.
+      If it is a single flight or boarding pass, return an array with EXACTLY 1 flight object.
       Schema for each flight segment:
       {
         "date": "YYYY-MM-DD",
@@ -258,87 +276,125 @@ export class SmartIngestEngine {
    */
   parseWithHeuristics(text) {
     const flights = [];
-    const lines = text.split('\n');
+    const cleanText = text.replace(/\r\n/g, '\n');
 
-    // Regex patterns
-    const flightNumRegex = /\b([A-Z0-9]{2})\s*([0-9]{1,4})\b/g;
-    const iataRegex = /\b([A-Z]{3})\b/g;
-    const dateRegex = /\b(20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20\d{2})\b/gi;
-    const timeRegex = /\b([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\b/g;
-    const seatRegex = /\b([0-9]{1,2}[A-K])\b/i;
+    const NON_IATA = new Set([
+      'THE', 'AND', 'FOR', 'NOT', 'ALL', 'CAN', 'NEW', 'DAY', 'MAY', 'YES', 'OFF',
+      'VIA', 'PER', 'ONE', 'TWO', 'AIR', 'FLT', 'DEP', 'ARR', 'SEC', 'MIN', 'HRS',
+      'EST', 'STD', 'STA', 'GATE', 'SEAT', 'CLASS', 'ZONE', 'TERM', 'DOCS', 'NAME',
+      'DATE', 'INFO', 'CODE', 'PASS', 'BOOK', 'CONF', 'REF', 'TIME', 'FROM', 'CABIN',
+      'TICK', 'TKT', 'BOARD', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN', 'JAN',
+      'FEB', 'MAR', 'APR', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'BAG',
+      'ROW', 'GRP', 'ETA', 'ETD', 'NON', 'REV', 'SEQ', 'SSR', 'ETK', 'E-TKT'
+    ]);
 
-    // Find all flight numbers
+    // 1. Extract Flight Numbers
+    const flightNumRegex = /\b([A-Z]{2}|[0-9][A-Z]|[A-Z][0-9])\s*([0-9]{1,4})\b/g;
+    const rawFlightNumbers = [];
     let fnMatch;
-    const foundFlightNumbers = [];
-    while ((fnMatch = flightNumRegex.exec(text)) !== null) {
-      const full = `${fnMatch[1]}${fnMatch[2]}`;
-      if (!['PM', 'AM', 'OK', 'NO', 'US', 'UK', 'ID'].includes(fnMatch[1])) {
-        foundFlightNumbers.push(full);
+    while ((fnMatch = flightNumRegex.exec(cleanText)) !== null) {
+      const carrier = fnMatch[1].toUpperCase();
+      const num = fnMatch[2];
+      if (!['PM', 'AM', 'OK', 'NO', 'US', 'UK', 'ID', 'MR', 'MS'].includes(carrier)) {
+        if (AIRLINES[carrier] || (parseInt(num) > 10 && parseInt(num) < 9999)) {
+          rawFlightNumbers.push(`${carrier}${num}`);
+        }
       }
     }
 
-    // Find all 3-letter IATA candidates
-    const iataCandidates = [];
+    // Deduplicate found flight numbers while preserving appearance order
+    const uniqueFlightNumbers = [];
+    for (const fn of rawFlightNumbers) {
+      if (!uniqueFlightNumbers.includes(fn)) uniqueFlightNumbers.push(fn);
+    }
+
+    // 2. Extract Valid IATA Airport Codes
+    const iataRegex = /\b([A-Z]{3})\b/g;
+    const rawIatas = [];
     let iMatch;
-    while ((iMatch = iataRegex.exec(text)) !== null) {
-      const code = iMatch[1];
-      if (getAirport(code)) {
-        iataCandidates.push(code);
+    while ((iMatch = iataRegex.exec(cleanText)) !== null) {
+      const code = iMatch[1].toUpperCase();
+      if (!NON_IATA.has(code) && getAirport(code)) {
+        rawIatas.push(code);
       }
     }
 
-    // Dates
+    // Deduplicate consecutive repeated IATAs
+    const distinctIatas = [];
+    for (const code of rawIatas) {
+      if (distinctIatas.length === 0 || distinctIatas[distinctIatas.length - 1] !== code) {
+        distinctIatas.push(code);
+      }
+    }
+
+    // 3. Extract Dates
+    const dateRegex = /\b(20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20\d{2}|\d{1,2}[-/.]\d{1,2}[-/.]20\d{2})\b/gi;
     const dates = [];
     let dMatch;
-    while ((dMatch = dateRegex.exec(text)) !== null) {
+    while ((dMatch = dateRegex.exec(cleanText)) !== null) {
       try {
         const d = new Date(dMatch[1]);
-        if (!isNaN(d.getTime())) {
-          dates.push(d.toISOString().split('T')[0]);
-        }
+        if (!isNaN(d.getTime())) dates.push(d.toISOString().split('T')[0]);
       } catch (e) {}
     }
 
-    // Seat
-    const sMatch = text.match(seatRegex);
+    // 4. Extract Times
+    const timeRegex = /\b([01]?\d|2[0-3]):([0-5]\d)\b/g;
+    const times = [];
+    let tMatch;
+    while ((tMatch = timeRegex.exec(cleanText)) !== null) {
+      times.push(`${tMatch[1].padStart(2, '0')}:${tMatch[2]}:00`);
+    }
+
+    // 5. Extract Seat
+    const seatRegex = /\b([0-9]{1,2}[A-K])\b/i;
+    const sMatch = cleanText.match(seatRegex);
     const seat = sMatch ? sMatch[1].toUpperCase() : '';
 
-    if (foundFlightNumbers.length > 0) {
-      for (let i = 0; i < foundFlightNumbers.length; i++) {
-        const fn = foundFlightNumbers[i];
+    // 6. Build Flight Segments
+    if (uniqueFlightNumbers.length > 0) {
+      for (let i = 0; i < uniqueFlightNumbers.length; i++) {
+        const fn = uniqueFlightNumbers[i];
         const schedule = lookupFlightSchedule(fn);
+
+        let fromCode = distinctIatas[i * 2] || schedule?.from || (distinctIatas[0] !== distinctIatas[1] ? distinctIatas[0] : 'DFW');
+        let toCode = distinctIatas[i * 2 + 1] || schedule?.to || (distinctIatas[1] && distinctIatas[1] !== fromCode ? distinctIatas[1] : 'LHR');
         
-        let fromCode = iataCandidates[i * 2] || schedule?.from || 'DFW';
-        let toCode = iataCandidates[i * 2 + 1] || schedule?.to || 'LHR';
-        let date = dates[i] || dates[0] || new Date().toISOString().split('T')[0];
+        if (fromCode === toCode && distinctIatas.length >= 2) {
+          fromCode = distinctIatas[0];
+          toCode = distinctIatas[1];
+        }
+
+        const depTime = times[i * 2] || schedule?.depTime || '10:00:00';
+        const arrTime = times[i * 2 + 1] || schedule?.arrTime || '18:00:00';
+        const date = dates[i] || dates[0] || new Date().toISOString().split('T')[0];
 
         flights.push({
           date,
           flightNumber: fn,
           fromCode,
           toCode,
-          depTime: schedule?.depTime || '12:00:00',
-          arrTime: schedule?.arrTime || '18:00:00',
-          duration: schedule?.duration || '06:00:00',
+          depTime,
+          arrTime,
+          duration: schedule?.duration || '07:30:00',
           airline: schedule?.airline || (AIRLINES[fn.slice(0, 2)] ? AIRLINES[fn.slice(0, 2)].name : 'Commercial Airline'),
           aircraft: schedule?.aircraft || 'Boeing 777 / Airbus A350',
-          seat: seat || '12A',
+          seat: seat || '',
           flightClass: 'Economy',
           note: 'Imported via Smart Import'
         });
       }
-    } else if (iataCandidates.length >= 2) {
-      // Found airports but no clear flight number
+    } else if (distinctIatas.length >= 2) {
       flights.push({
         date: dates[0] || new Date().toISOString().split('T')[0],
         flightNumber: 'FL' + Math.floor(100 + Math.random() * 900),
-        fromCode: iataCandidates[0],
-        toCode: iataCandidates[1],
-        depTime: '12:00:00',
-        arrTime: '16:00:00',
-        duration: '04:00:00',
+        fromCode: distinctIatas[0],
+        toCode: distinctIatas[1],
+        depTime: times[0] || '10:00:00',
+        arrTime: times[1] || '18:00:00',
+        duration: '06:00:00',
         airline: 'Commercial Flight',
-        aircraft: 'Airbus A320',
+        aircraft: 'Commercial Aircraft',
         seat: seat || '',
         flightClass: 'Economy',
         note: 'Imported via Smart Import'
@@ -346,7 +402,7 @@ export class SmartIngestEngine {
     }
 
     if (flights.length === 0) {
-      throw new Error('Could not detect flight numbers or airport codes in the pasted text. Please check the content or enter your Gemini API key for deep extraction.');
+      throw new Error('Could not detect flight details. Please verify the image or paste booking confirmation text.');
     }
 
     return this.normalizeExtractedFlights(flights);
