@@ -1547,10 +1547,15 @@ class SkyLogApp {
       return;
     }
 
+    this.currentSmartExtracted = flights;
+
     container.innerHTML = `
       <div class="smart-results-card">
-        <div class="flex items-center justify-between mb-3">
-          <h4 class="text-white font-bold">🎉 Detected ${flights.length} Flight Segment${flights.length > 1 ? 's' : ''}</h4>
+        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div>
+            <h4 class="text-white font-bold">🎉 Extracted ${flights.length} Flight${flights.length > 1 ? 's' : ''}</h4>
+            <small class="text-muted text-xs">Review or tap ✏️ to edit details before adding to logbook</small>
+          </div>
           <button class="btn btn-primary btn-sm" onclick="window.app.confirmAllSmartFlights('${containerId}')">
             ✅ Add ${flights.length} Flight${flights.length > 1 ? 's' : ''} to Logbook
           </button>
@@ -1558,26 +1563,71 @@ class SkyLogApp {
 
         <div class="smart-flights-list">
           ${flights.map((f, idx) => `
-            <div class="smart-flight-item glass-card mb-2 p-3">
+            <div class="smart-flight-item glass-card mb-3 p-3" id="smart-card-${idx}">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <span class="airline-badge font-bold">${f.airlineCode || '✈️'}</span>
-                  <strong>${f.flightNumber}</strong>
-                  <span class="text-muted text-xs">• ${f.date}</span>
+                  <input type="text" class="form-control form-control-sm font-bold text-cyan" style="width: 90px; text-transform: uppercase;" value="${f.flightNumber}" onchange="window.app.updateExtractedFlight(${idx}, 'flightNumber', this.value, '${containerId}')" placeholder="Flight #">
+                  <input type="date" class="form-control form-control-sm text-xs" style="width: 130px;" value="${f.date}" onchange="window.app.updateExtractedFlight(${idx}, 'date', this.value, '${containerId}')">
                 </div>
-                <span class="badge class-eco">${f.flightClass === 3 ? 'Business' : f.flightClass === 4 ? 'First' : 'Economy'}</span>
+                <div class="flex items-center gap-1">
+                  <button type="button" class="btn btn-secondary btn-xs" onclick="window.app.toggleEditExtractedFlight(${idx})" title="Edit Details">✏️ Edit</button>
+                  <button type="button" class="btn btn-danger btn-xs" onclick="window.app.removeExtractedFlight(${idx}, '${containerId}')" title="Remove Segment">🗑️</button>
+                </div>
               </div>
-              <div class="smart-route-row flex items-center gap-3 my-2">
-                <span class="station-code-sm font-bold text-cyan">${f.fromCode}</span>
-                <span class="route-arrow text-amber">✈️ ➔</span>
-                <span class="station-code-sm font-bold text-cyan">${f.toCode}</span>
+
+              <!-- Route Origin ➔ Destination Row -->
+              <div class="smart-route-row flex items-center gap-2 my-2 flex-wrap">
+                <div class="flex items-center gap-1">
+                  <label class="text-xs text-muted">From:</label>
+                  <input type="text" maxlength="3" class="form-control form-control-sm text-center font-bold font-mono text-cyan" style="width: 60px; text-transform: uppercase;" value="${f.fromCode}" onchange="window.app.updateExtractedFlight(${idx}, 'fromCode', this.value, '${containerId}')">
+                </div>
+                <span class="route-arrow text-amber">➔</span>
+                <div class="flex items-center gap-1">
+                  <label class="text-xs text-muted">To:</label>
+                  <input type="text" maxlength="3" class="form-control form-control-sm text-center font-bold font-mono text-cyan" style="width: 60px; text-transform: uppercase;" value="${f.toCode}" onchange="window.app.updateExtractedFlight(${idx}, 'toCode', this.value, '${containerId}')">
+                </div>
                 <span class="text-xs text-muted">(${f.distanceKm.toLocaleString()} km)</span>
               </div>
-              <div class="flex items-center justify-between text-xs text-muted">
+
+              <!-- Quick Info Badge Row -->
+              <div class="flex items-center justify-between text-xs text-muted mt-1 flex-wrap gap-2">
                 <span>⏱️ ${f.depTime || '—'} ➔ ${f.arrTime || '—'}</span>
                 <span>💺 Seat: <strong>${f.seatNumber || '—'}</strong></span>
                 <span>🛩️ ${f.aircraftRaw || 'Airbus/Boeing'}</span>
               </div>
+
+              <!-- Collapsible Full Detail Editor -->
+              <div class="smart-full-editor mt-3 pt-2 border-t border-subtle" id="smart-editor-${idx}" style="display: none;">
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label class="text-muted block mb-1">Departure Time</label>
+                    <input type="text" class="form-control form-control-sm" value="${f.depTime || '10:00:00'}" placeholder="HH:MM:SS" onchange="window.app.updateExtractedFlight(${idx}, 'depTime', this.value, '${containerId}')">
+                  </div>
+                  <div>
+                    <label class="text-muted block mb-1">Arrival Time</label>
+                    <input type="text" class="form-control form-control-sm" value="${f.arrTime || '18:00:00'}" placeholder="HH:MM:SS" onchange="window.app.updateExtractedFlight(${idx}, 'arrTime', this.value, '${containerId}')">
+                  </div>
+                  <div>
+                    <label class="text-muted block mb-1">Seat Number</label>
+                    <input type="text" class="form-control form-control-sm" value="${f.seatNumber || ''}" placeholder="e.g. 14B" onchange="window.app.updateExtractedFlight(${idx}, 'seatNumber', this.value, '${containerId}')">
+                  </div>
+                  <div>
+                    <label class="text-muted block mb-1">Cabin Class</label>
+                    <select class="form-control form-control-sm" onchange="window.app.updateExtractedFlight(${idx}, 'flightClass', parseInt(this.value), '${containerId}')">
+                      <option value="1" ${f.flightClass === 1 ? 'selected' : ''}>Economy</option>
+                      <option value="2" ${f.flightClass === 2 ? 'selected' : ''}>Premium Economy</option>
+                      <option value="3" ${f.flightClass === 3 ? 'selected' : ''}>Business Class</option>
+                      <option value="4" ${f.flightClass === 4 ? 'selected' : ''}>First Class</option>
+                    </select>
+                  </div>
+                  <div class="col-span-2">
+                    <label class="text-muted block mb-1">Aircraft Model</label>
+                    <input type="text" class="form-control form-control-sm" value="${f.aircraftRaw || ''}" placeholder="e.g. Boeing 777-300ER" onchange="window.app.updateExtractedFlight(${idx}, 'aircraftRaw', this.value, '${containerId}')">
+                  </div>
+                </div>
+              </div>
+
             </div>
           `).join('')}
         </div>
@@ -1585,14 +1635,54 @@ class SkyLogApp {
     `;
   }
 
+  toggleEditExtractedFlight(index) {
+    const editor = document.getElementById(`smart-editor-${index}`);
+    if (editor) {
+      const isHidden = editor.style.display === 'none';
+      editor.style.display = isHidden ? 'block' : 'none';
+    }
+  }
+
+  updateExtractedFlight(index, field, value, containerId) {
+    if (!this.currentSmartExtracted || !this.currentSmartExtracted[index]) return;
+    const item = this.currentSmartExtracted[index];
+    item[field] = value;
+
+    if (field === 'flightNumber') {
+      item.airlineCode = value.slice(0, 2).toUpperCase();
+      item.airlineRaw = AIRLINES[item.airlineCode]?.name || item.airlineRaw || 'Commercial Airline';
+    }
+
+    if (field === 'fromCode' || field === 'toCode') {
+      const fromAp = getAirport(item.fromCode);
+      const toAp = getAirport(item.toCode);
+      if (fromAp) item.fromAirport = fromAp;
+      if (toAp) item.toAirport = toAp;
+      if (fromAp && toAp) {
+        item.distanceKm = calculateDistance(fromAp.lat, fromAp.lon, toAp.lat, toAp.lon).km;
+      }
+    }
+  }
+
+  removeExtractedFlight(index, containerId) {
+    if (!this.currentSmartExtracted) return;
+    this.currentSmartExtracted.splice(index, 1);
+    this.renderSmartResults(this.currentSmartExtracted, containerId);
+  }
+
   confirmAllSmartFlights(containerId) {
-    if (!this.currentSmartExtracted || this.currentSmartExtracted.length === 0) return;
+    if (!this.currentSmartExtracted || this.currentSmartExtracted.length === 0) {
+      alert('No flights to add.');
+      return;
+    }
+    
+    // Import flights into persistent FlightStore
     const count = this.smartIngest.importFlights(this.currentSmartExtracted);
     
     // Close modal if open
     this.closeModal('smart-ingest-modal');
     
-    // Clear container & file state
+    // Clear preview & state
     this.clearSmartFile();
     this.clearSmartModalFile();
     const container = document.getElementById(containerId);

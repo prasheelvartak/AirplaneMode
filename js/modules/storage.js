@@ -131,6 +131,12 @@ export class FlightStore {
     this.save();
   }
 
+  setFlights(flights) {
+    this.flights = flights || [];
+    this.flights.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    this.save();
+  }
+
   clearAll() {
     this.flights = [];
     this.save();

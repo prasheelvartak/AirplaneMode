@@ -3368,3 +3368,25 @@ html, body {
   animation: pulseAnimation 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   font-weight: 600;
 }
+
+.btn-xs {
+  padding: 3px 8px !important;
+  font-size: 0.72rem !important;
+  border-radius: var(--radius-sm) !important;
+  line-height: 1.2;
+}
+
+.smart-full-editor {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 10px;
+  border-radius: var(--radius-md);
+  margin-top: 8px;
+}
+
+[data-theme="light"] .smart-full-editor {
+  background: #f1f5f9;
+}
+
+.border-subtle {
+  border-color: var(--border-subtle) !important;
+}
