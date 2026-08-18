@@ -1218,14 +1218,20 @@ class SkyLogApp {
     }
   }
 
+  triggerSmartFileInput(context) {
+    const id = context === 'modal' ? 'smart-modal-file-input' : 'smart-file-input';
+    const input = document.getElementById(id);
+    if (input) {
+      input.value = '';
+      input.click();
+    }
+  }
+
   setupSmartIngestDropzones() {
     // 1. In Tab IO
     const smartZone = document.getElementById('smart-file-zone');
     const smartInput = document.getElementById('smart-file-input');
     if (smartZone && smartInput) {
-      smartZone.addEventListener('click', (e) => {
-        if (e.target.tagName !== 'BUTTON') smartInput.click();
-      });
       smartInput.addEventListener('change', (e) => {
         if (e.target.files && e.target.files[0]) {
           this.handleSmartFileSelected(e.target.files[0], 'io');
@@ -1246,9 +1252,6 @@ class SkyLogApp {
     const modalZone = document.getElementById('smart-modal-file-zone');
     const modalInput = document.getElementById('smart-modal-file-input');
     if (modalZone && modalInput) {
-      modalZone.addEventListener('click', (e) => {
-        if (e.target.tagName !== 'BUTTON') modalInput.click();
-      });
       modalInput.addEventListener('change', (e) => {
         if (e.target.files && e.target.files[0]) {
           this.handleSmartFileSelected(e.target.files[0], 'modal');
@@ -1365,7 +1368,8 @@ class SkyLogApp {
     if (input) input.value = '';
   }
 
-  clearSmartModalFile() {
+  clearSmartModalFile(e) {
+    if (e) e.stopPropagation();
     this.activeSmartModalFile = null;
     const preview = document.getElementById('smart-modal-preview');
     const input = document.getElementById('smart-modal-file-input');

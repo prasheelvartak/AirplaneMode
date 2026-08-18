@@ -424,11 +424,13 @@
               </div>
 
               <!-- Mode 1 & 2: Image / PDF Dropzone -->
-              <div id="smart-file-zone" class="drop-zone smart-dropzone">
+              <div id="smart-file-zone" class="drop-zone smart-dropzone cursor-pointer" onclick="window.app.triggerSmartFileInput('io')">
                 <div class="drop-icon" id="smart-drop-icon">📸</div>
                 <h4 id="smart-drop-title">Drop Screenshot or PDF here</h4>
-                <p id="smart-drop-sub">or click to choose from camera / photos / files</p>
-                <input type="file" id="smart-file-input" accept="image/png,image/jpeg,image/webp,application/pdf" style="display: none;">
+                <p id="smart-drop-sub">or tap to choose from camera / photo library / files</p>
+                <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="window.app.triggerSmartFileInput('io'); event.stopPropagation();">
+                  📁 Browse Photos & Files
+                </button>
                 
                 <!-- Live File / Image Preview -->
                 <div id="smart-file-preview" class="smart-file-preview" style="display: none;">
@@ -437,6 +439,7 @@
                   <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="window.app.clearSmartFile(event)">Remove</button>
                 </div>
               </div>
+              <input type="file" id="smart-file-input" accept="image/png,image/jpeg,image/webp,application/pdf" style="display: none;">
 
               <!-- Mode 3: Raw Text Paste -->
               <div id="smart-text-zone" class="smart-text-zone" style="display: none;">
@@ -731,17 +734,21 @@
           </button>
         </div>
 
-        <div id="smart-modal-file-zone" class="drop-zone smart-dropzone">
+        <div id="smart-modal-file-zone" class="drop-zone smart-dropzone cursor-pointer" onclick="window.app.triggerSmartFileInput('modal')">
           <div class="drop-icon">📸</div>
           <h4>Drop Screenshot or PDF here</h4>
-          <p>or click to browse photos & files</p>
-          <input type="file" id="smart-modal-file-input" accept="image/png,image/jpeg,image/webp,application/pdf" style="display: none;">
+          <p>or tap to browse photos & files</p>
+          <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="window.app.triggerSmartFileInput('modal'); event.stopPropagation();">
+            📁 Browse Photos & Files
+          </button>
           
           <div id="smart-modal-preview" class="smart-file-preview" style="display: none;">
             <img id="smart-modal-preview-img" src="" alt="Screenshot Preview" style="display: none;">
             <div id="smart-modal-preview-info" class="smart-preview-info"></div>
+            <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="window.app.clearSmartModalFile(event)">Remove</button>
           </div>
         </div>
+        <input type="file" id="smart-modal-file-input" accept="image/png,image/jpeg,image/webp,application/pdf" style="display: none;">
 
         <div id="smart-modal-text-zone" class="smart-text-zone" style="display: none;">
           <textarea id="smart-modal-text-input" class="form-control" rows="5" placeholder="Paste booking confirmation email text..."></textarea>
