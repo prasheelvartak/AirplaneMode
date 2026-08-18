@@ -156,6 +156,18 @@ html, body {
   display: flex;
   align-items: center;
   gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.brand-section:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.brand-section:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .brand-logo {
