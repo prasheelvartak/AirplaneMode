@@ -5,7 +5,8 @@
  */
 
 import { lookupFlightSchedule } from '../data/flightSchedules.js';
-import { getAirport, getAirline, calculateGreatCircleDistance } from '../data/airports.js';
+import { getAirport, calculateDistance } from '../data/airports.js';
+import { AIRLINES, extractAirlineCode } from '../data/aircraft.js';
 
 export class SmartIngestEngine {
   constructor(store, app) {
@@ -247,11 +248,11 @@ export class SmartIngestEngine {
           depTime: schedule?.depTime || '12:00:00',
           arrTime: schedule?.arrTime || '18:00:00',
           duration: schedule?.duration || '06:00:00',
-          airline: schedule?.airline || getAirline(fn.slice(0, 2)) || 'Commercial Airline',
+          airline: schedule?.airline || (AIRLINES[fn.slice(0, 2)] ? AIRLINES[fn.slice(0, 2)].name : 'Commercial Airline'),
           aircraft: schedule?.aircraft || 'Boeing 777 / Airbus A350',
           seat: seat || '12A',
           flightClass: 'Economy',
-          note: 'Imported via Smart Ingest'
+          note: 'Imported via Smart Import'
         });
       }
     } else if (iataCandidates.length >= 2) {
@@ -268,7 +269,7 @@ export class SmartIngestEngine {
         aircraft: 'Airbus A320',
         seat: seat || '',
         flightClass: 'Economy',
-        note: 'Imported via Smart Ingest'
+        note: 'Imported via Smart Import'
       });
     }
 
@@ -286,7 +287,8 @@ export class SmartIngestEngine {
     return flights.map(f => {
       const fromAp = getAirport(f.fromCode);
       const toAp = getAirport(f.toCode);
-      const dist = (fromAp && toAp) ? calculateGreatCircleDistance(fromAp.lat, fromAp.lon, toAp.lat, toAp.lon) : 3500;
+      const distObj = (fromAp && toAp) ? calculateDistance(fromAp.lat, fromAp.lon, toAp.lat, toAp.lon) : { km: 3500 };
+      const dist = distObj.km || 3500;
 
       // Class mapping
       let flightClassNum = 1;

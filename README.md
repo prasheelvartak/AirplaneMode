@@ -31,7 +31,7 @@
 1. Create a new repository on GitHub: `airplane-mode`
 2. Push or upload the project files (`index.html`, `styles/`, `js/`, `vercel.json`).
 3. Import the repository into [Vercel](https://vercel.com/new) and click **Deploy**.
-4. Vercel will instantly generate a live URL (e.g. `https://airplane-mode.vercel.app`).
+4. Vercel will instantly generate a live URL (e.g. `https://airmode.vercel.app`).
 
 ---
 

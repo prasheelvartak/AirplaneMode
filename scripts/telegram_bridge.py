@@ -33,7 +33,7 @@ ALLOWED_CHAT_ID = os.environ.get("TELEGRAM_ALLOWED_CHAT_ID", None)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", None)
 
 REPO_URL = "https://github.com/prasheelvartak/AirplaneMode.git"
-VERCEL_URL = "https://airplane-mode.vercel.app"
+VERCEL_URL = "https://airmode.vercel.app"
 
 API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
