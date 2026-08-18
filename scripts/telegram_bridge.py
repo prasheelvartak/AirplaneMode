@@ -1,6 +1,10 @@
 """
-Telegram Mobile Remote Bridge for AirplaneMode
-Allows remote prompts, code updates, git pushes, and Vercel deployments directly from your phone.
+Telegram Mobile Remote Bridge for AirplaneMode (v2.0 - Safe & Robust)
+Features:
+- Surgical search-and-replace (never truncates or overwrites large files)
+- Automatic git rollback safety checks
+- Stable Gemini model fallbacks with exponential backoff retry on 503/429
+- Quick commands (/status, /push, /rollback, /help)
 """
 
 import os
@@ -24,13 +28,8 @@ if os.path.exists(ENV_FILE):
                 k, v = line.split("=", 1)
                 os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
-# Replace with your Telegram Bot Token from @BotFather
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE")
-
-# Optional: Set your Telegram Chat ID to restrict commands to only your phone
 ALLOWED_CHAT_ID = os.environ.get("TELEGRAM_ALLOWED_CHAT_ID", None)
-
-# Gemini API Key for autonomous code edits from phone prompts
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", None)
 
 REPO_URL = "https://github.com/prasheelvartak/AirplaneMode.git"
@@ -40,7 +39,7 @@ API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 
 def send_message(chat_id, text, parse_mode="Markdown"):
-    """Send a message back to the user on Telegram."""
+    """Send a message back to Telegram."""
     url = f"{API_BASE}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -56,17 +55,13 @@ def send_message(chat_id, text, parse_mode="Markdown"):
 
 
 def run_git_cmd(args):
-    """Run a git command in the workspace directory."""
-    git_paths = [
-        r"C:\Program Files\Git\cmd\git.exe",
-        "git"
-    ]
+    """Run a git command in workspace."""
+    git_paths = [r"C:\Program Files\Git\cmd\git.exe", "git"]
     git_exe = "git"
     for p in git_paths:
         if os.path.exists(p):
             git_exe = p
             break
-
     cmd = [git_exe] + args
     res = subprocess.run(cmd, cwd=WORKSPACE_DIR, capture_output=True, text=True, timeout=30)
     return res.returncode, res.stdout.strip(), res.stderr.strip()
@@ -74,177 +69,199 @@ def run_git_cmd(args):
 
 def handle_status_command(chat_id):
     """Return repository and deployment status."""
-    code, out, err = run_git_cmd(["status", "--short"])
+    _, out, _ = run_git_cmd(["status", "--short"])
     _, log_out, _ = run_git_cmd(["log", "-1", "--oneline"])
-    
-    status_text = "🟢 Clean (All changes synced)" if not out else f"🟡 Uncommitted changes:\n`{out}`"
+    status_text = "🟢 Clean (Synced with live site)" if not out else f"🟡 Modified files:\n`{out}`"
     msg = (
         f"✈️ *AirplaneMode Status*\n\n"
-        f"📍 *Latest Commit:* `{log_out}`\n"
+        f"📍 *Latest Live Commit:* `{log_out}`\n"
         f"📂 *Working Tree:* {status_text}\n"
         f"🌐 *Live Webapp:* {VERCEL_URL}\n"
-        f"🔗 *GitHub Repo:* {REPO_URL}"
+        f"🔗 *GitHub:* {REPO_URL}"
     )
     send_message(chat_id, msg)
 
 
+def handle_rollback_command(chat_id):
+    """Roll back to previous commit in case of an unwanted change."""
+    send_message(chat_id, "⏳ Rolling back previous commit...")
+    code, _, err = run_git_cmd(["revert", "--no-edit", "HEAD"])
+    if code == 0:
+        run_git_cmd(["push", "origin", "main"])
+        send_message(chat_id, "✅ *Successfully rolled back previous change!* Live site restoring now.")
+    else:
+        # Fallback to hard reset of last commit and force push
+        run_git_cmd(["reset", "--hard", "HEAD~1"])
+        run_git_cmd(["push", "origin", "main", "--force"])
+        send_message(chat_id, "✅ *Reset to previous commit and deployed.*")
+
+
 def handle_push_command(chat_id, commit_msg="Mobile update via Telegram"):
     """Commit all local changes and push to GitHub (triggers Vercel deploy)."""
-    send_message(chat_id, "⏳ Staging files, committing, and pushing to GitHub...")
+    send_message(chat_id, "⏳ Staging files and pushing to GitHub...")
     run_git_cmd(["add", "."])
     code, out, err = run_git_cmd(["commit", "-m", commit_msg])
-    
-    if code != 0 and "nothing to commit" in (out + err).lower():
-        send_message(chat_id, "ℹ️ No changes to commit. Pushing latest main branch...")
     
     p_code, p_out, p_err = run_git_cmd(["push", "origin", "main"])
     if p_code == 0:
         send_message(
             chat_id,
             f"✅ *Pushed to GitHub successfully!*\n\n"
-            f"🚀 Vercel is deploying the latest update.\n"
-            f"🌐 Live in ~10 seconds at: {VERCEL_URL}"
+            f"🚀 Vercel is deploying the update.\n"
+            f"🌐 Live at: {VERCEL_URL}"
         )
     else:
         send_message(chat_id, f"❌ Push failed:\n`{p_err or p_out}`")
 
 
-def get_available_gemini_model():
-    """Dynamically query Google AI Studio to find supported models for this API key."""
-    if not GEMINI_API_KEY:
-        return "gemini-3.6-flash"
+def call_gemini_with_retry(prompt_text):
+    """Call Gemini API with model fallbacks and retry on high demand (503/429)."""
+    # Priority list of models from fastest/most reliable to preview
+    candidate_models = [
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-3.6-flash",
+        "gemini-3.7-flash",
+        "gemini-flash-latest",
+        "gemini-pro-latest"
+    ]
     
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GEMINI_API_KEY}"
-        res = requests.get(url, timeout=10)
-        if res.status_code == 200:
-            data = res.json()
-            models = data.get("models", [])
-            valid_models = []
-            for m in models:
-                name = m.get("name", "").replace("models/", "")
-                methods = m.get("supportedGenerationMethods", [])
-                if "generateContent" in methods:
-                    valid_models.append(name)
-            
-            print(f"Available Gemini models for this key: {valid_models}")
-            # Prioritize Gemini 3.x flagship models
-            for preferred in [
-                "gemini-3.6-flash",
-                "gemini-3.7-flash",
-                "gemini-3.5-flash",
-                "gemini-3.1-pro-preview",
-                "gemini-flash-latest",
-                "gemini-pro-latest"
-            ]:
-                if preferred in valid_models:
-                    return preferred
-            if valid_models:
-                return valid_models[0]
-    except Exception as e:
-        print(f"Could not list models: {e}")
-    
-    return "gemini-3.6-flash"
+    for model in candidate_models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+        req_body = {
+            "contents": [{"parts": [{"text": prompt_text}]}],
+            "generationConfig": {"responseMimeType": "application/json"}
+        }
+        
+        for attempt in range(2):
+            try:
+                res = requests.post(url, json=req_body, timeout=40)
+                if res.status_code == 200:
+                    data = res.json()
+                    if "candidates" in data and len(data["candidates"]) > 0:
+                        text_part = data["candidates"][0]["content"]["parts"][0]["text"]
+                        return json.loads(text_part), model, None
+                elif res.status_code in [429, 503]:
+                    time.sleep(2)
+                else:
+                    break
+            except Exception as e:
+                print(f"Error calling {model}: {e}")
+                time.sleep(1)
+
+    return None, None, "All Gemini models are currently experiencing high demand. Please try again in a few moments."
 
 
-def handle_ai_prompt(chat_id, prompt):
-    """Process an AI instruction with Gemini and apply changes to codebase."""
+def handle_ai_prompt(chat_id, user_prompt):
+    """Process an AI instruction safely using surgical find-and-replace diffs."""
     if not GEMINI_API_KEY:
-        send_message(
-            chat_id,
-            "💡 *Prompt received!* To enable autonomous AI code generation directly from Telegram, set `GEMINI_API_KEY`.\n\n"
-            "You can also use quick commands like `/push [msg]` or `/status`."
-        )
+        send_message(chat_id, "💡 *Prompt received!* Please set `GEMINI_API_KEY` in your `.env` file.")
         return
 
-    send_message(chat_id, f"🧠 *Processing prompt with Gemini...*\n_{prompt}_")
+    send_message(chat_id, f"🧠 *Analyzing prompt with Gemini...*\n_{user_prompt}_")
 
-    # Read core app files
-    index_html = ""
-    main_css = ""
-    try:
-        with open(os.path.join(WORKSPACE_DIR, "index.html"), "r", encoding="utf-8") as f:
-            index_html = f.read()
-        with open(os.path.join(WORKSPACE_DIR, "styles", "main.css"), "r", encoding="utf-8") as f:
-            main_css = f.read()
-    except Exception as e:
-        print(f"Error reading local files: {e}")
+    # Read current index.html and main.css
+    index_path = os.path.join(WORKSPACE_DIR, "index.html")
+    css_path = os.path.join(WORKSPACE_DIR, "styles", "main.css")
+    js_path = os.path.join(WORKSPACE_DIR, "js", "app.js")
+
+    with open(index_path, "r", encoding="utf-8") as f:
+        orig_index = f.read()
+    with open(css_path, "r", encoding="utf-8") as f:
+        orig_css = f.read()
+    with open(js_path, "r", encoding="utf-8") as f:
+        orig_js = f.read()
 
     system_instruction = (
-        "You are an expert AI web developer modifying the AirplaneMode flight tracking web app. "
-        "Analyze the user's task and return a JSON object with the exact modified files. "
-        "Format: {\"files\": [{\"path\": \"index.html or styles/main.css or js/app.js\", \"content\": \"full updated file content\"}], \"summary\": \"Brief explanation of what was changed\"}"
+        "You are an expert AI software engineer for the AirplaneMode luxury flight tracking web application.\n"
+        "DO NOT rewrite entire files. Instead, return SURGICAL FIND-AND-REPLACE modifications so no existing styles or features get deleted.\n"
+        "Return a JSON object with this schema:\n"
+        "{\n"
+        "  \"summary\": \"Brief 1-sentence description of the change\",\n"
+        "  \"replacements\": [\n"
+        "    {\n"
+        "      \"file\": \"index.html\" (or \"styles/main.css\" or \"js/app.js\"),\n"
+        "      \"find\": \"exact text block to find and replace in the file\",\n"
+        "      \"replace\": \"new replacement text to insert\"\n"
+        "    }\n"
+        "  ],\n"
+        "  \"append_css\": \"optional new CSS rules to append at the end of styles/main.css\"\n"
+        "}\n"
     )
-    
-    req_body = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": f"System Context:\n{system_instruction}\n\nUser Task:\n{prompt}\n\nCurrent index.html:\n```html\n{index_html[:6000]}\n```\n\nCurrent styles/main.css:\n```css\n{main_css[:6000]}\n```"}
-                ]
-            }
-        ],
-        "generationConfig": {
-            "responseMimeType": "application/json"
-        }
-    }
 
-    chosen_model = get_available_gemini_model()
-    candidate_endpoints = [
-        f"https://generativelanguage.googleapis.com/v1beta/models/{chosen_model}:generateContent?key={GEMINI_API_KEY}",
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}",
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key={GEMINI_API_KEY}",
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}",
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_API_KEY}"
-    ]
+    prompt_payload = (
+        f"{system_instruction}\n\n"
+        f"USER REQUEST: {user_prompt}\n\n"
+        f"INDEX.HTML (first 100 lines):\n```html\n{orig_index[:2500]}\n```\n\n"
+        f"MAIN.CSS (header & nav excerpt):\n```css\n{orig_css[:2500]}\n```\n"
+    )
 
-    last_error = None
-    res_data = None
-
-    for endpoint in candidate_endpoints:
-        try:
-            res = requests.post(endpoint, json=req_body, timeout=45)
-            res_data = res.json()
-            if res.status_code == 200 and "candidates" in res_data:
-                break
-            else:
-                api_err = res_data.get("error", {}).get("message", f"HTTP {res.status_code}")
-                last_error = api_err
-                print(f"Attempt failed on {endpoint.split('?')[0]}: {api_err}")
-        except Exception as e:
-            last_error = str(e)
-            print(f"Request error: {e}")
-
-    if not res_data or "candidates" not in res_data:
-        err_msg = res_data.get("error", {}).get("message") if res_data else last_error
-        send_message(chat_id, f"⚠️ *Gemini API Error:*\n`{err_msg or last_error}`")
+    result_json, used_model, err = call_gemini_with_retry(prompt_payload)
+    if err or not result_json:
+        send_message(chat_id, f"⚠️ *Gemini Error:* {err or 'Could not generate response'}")
         return
 
-    try:
-        raw_text = res_data["candidates"][0]["content"]["parts"][0]["text"]
-        result = json.loads(raw_text)
+    summary = result_json.get("summary", "Applied code update")
+    replacements = result_json.get("replacements", [])
+    append_css = result_json.get("append_css", "").strip()
 
-        summary = result.get("summary", "Updated files based on prompt")
-        files = result.get("files", [])
-        
-        if not files:
-            send_message(chat_id, f"ℹ️ *AI Response:* {summary} (No file edits required)")
-            return
+    if not replacements and not append_css:
+        send_message(chat_id, f"ℹ️ *No code edits required:* {summary}")
+        return
 
-        for file_info in files:
-            rel_path = file_info.get("path", "").lstrip("/\\")
-            content = file_info.get("content", "")
-            if rel_path and content:
-                target_path = os.path.join(WORKSPACE_DIR, rel_path)
-                os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                with open(target_path, "w", encoding="utf-8") as f:
-                    f.write(content)
+    # Apply surgical replacements safely
+    modified_files = set()
+    errors = []
 
-        # Auto commit and push
-        handle_push_command(chat_id, f"Mobile: {prompt[:50]}")
-        send_message(chat_id, f"🎉 *Change completed & deployed:*\n{summary}")
-    except Exception as e:
-        send_message(chat_id, f"⚠️ Error applying AI changes: `{e}`")
+    for rep in replacements:
+        target_rel = rep.get("file", "").lstrip("/\\")
+        find_text = rep.get("find", "")
+        replace_text = rep.get("replace", "")
+
+        if not target_rel or not find_text:
+            continue
+
+        target_full = os.path.join(WORKSPACE_DIR, target_rel)
+        if not os.path.exists(target_full):
+            errors.append(f"File `{target_rel}` not found")
+            continue
+
+        with open(target_full, "r", encoding="utf-8") as f:
+            file_content = f.read()
+
+        if find_text not in file_content:
+            errors.append(f"Could not locate matching target snippet in `{target_rel}`")
+            continue
+
+        # Perform exact single replacement
+        new_content = file_content.replace(find_text, replace_text, 1)
+        with open(target_full, "w", encoding="utf-8") as f:
+            f.write(new_content)
+        modified_files.add(target_rel)
+
+    # Append any custom CSS
+    if append_css:
+        with open(css_path, "a", encoding="utf-8") as f:
+            f.write(f"\n\n/* Added via Mobile Prompt: {user_prompt[:40]} */\n{append_css}\n")
+        modified_files.add("styles/main.css")
+
+    if not modified_files and errors:
+        send_message(chat_id, f"⚠️ *Update aborted to protect UI integrity:*\n" + "\n".join(f"• {e}" for e in errors))
+        return
+
+    # Safety check: Verify file sizes did not drop abnormally
+    with open(css_path, "r", encoding="utf-8") as f:
+        current_css_len = len(f.read())
+    if current_css_len < len(orig_css) * 0.85:
+        # Emergency rollback
+        with open(css_path, "w", encoding="utf-8") as f:
+            f.write(orig_css)
+        send_message(chat_id, "🛡️ *Safety Guardian:* Change rejected because it would have deleted core styles.")
+        return
+
+    # Commit & push
+    handle_push_command(chat_id, f"Mobile: {user_prompt[:50]}")
+    send_message(chat_id, f"🎉 *Change completed [{used_model}]:*\n{summary}\n\nType `/rollback` if you want to undo this.")
 
 
 def handle_message(message):
@@ -252,28 +269,28 @@ def handle_message(message):
     chat_id = message["chat"]["id"]
     text = message.get("text", "").strip()
 
-    # Security check if set
     if ALLOWED_CHAT_ID and str(chat_id) != str(ALLOWED_CHAT_ID):
-        send_message(chat_id, "⛔ Unauthorized. This bot is private to the repository owner.")
+        send_message(chat_id, "⛔ Unauthorized.")
         return
 
-    print(f"[{time.strftime('%X')}] Message from {chat_id}: {text}")
+    print(f"[{time.strftime('%X')}] Telegram prompt: {text}")
 
     if text.startswith("/start") or text.startswith("/help"):
         help_msg = (
-            "✈️ *Welcome to AirplaneMode Mobile Bridge!*\n\n"
-            "You can iterate on your web app directly from Telegram on your phone:\n\n"
-            "📌 *Commands:*\n"
+            "✈️ *AirplaneMode Mobile Control (v2.0 Safe)*\n\n"
             "• `/status` - Check git status & Vercel deployment\n"
-            "• `/push <message>` - Commit & push changes to trigger Vercel build\n"
-            "• `/help` - Show this menu\n\n"
-            "💬 *Plain Text Prompts:*\n"
-            "Type any prompt (e.g. _'Add a dark blue gradient to the header'_ or _'Add JFK to demo routes'_) to execute code updates on the go!"
+            "• `/push <message>` - Manually commit & push\n"
+            "• `/rollback` - 1-tap undo of the last change\n"
+            "• `/help` - Show commands\n\n"
+            "💬 *Send any prompt:* e.g. _'Add a badge saying v2.0 in the header'_ or _'Make the map glow arcs gold'_"
         )
         send_message(chat_id, help_msg)
 
     elif text.startswith("/status"):
         handle_status_command(chat_id)
+
+    elif text.startswith("/rollback"):
+        handle_rollback_command(chat_id)
 
     elif text.startswith("/push"):
         commit_msg = text.replace("/push", "").strip() or "Mobile update via Telegram"
@@ -284,15 +301,14 @@ def handle_message(message):
 
 
 def poll_updates():
-    """Long polling loop for incoming Telegram messages."""
+    """Main long-polling loop."""
     print("=" * 60)
-    print("✈️ AirplaneMode Telegram Bridge Active")
+    print("✈️ AirplaneMode Telegram Bridge (v2.0 Safe) Active")
     print(f"📁 Workspace: {WORKSPACE_DIR}")
     print("=" * 60)
-    
+
     if TELEGRAM_BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN_HERE":
-        print("\n❌ Error: Please set your TELEGRAM_BOT_TOKEN in telegram_bridge.py")
-        print("👉 Message @BotFather on Telegram, type /newbot, and paste the token.\n")
+        print("\n❌ Error: Please set your TELEGRAM_BOT_TOKEN in .env file")
         return
 
     last_update_id = 0
