@@ -1289,12 +1289,12 @@ class SkyLogApp {
       if (mode === 'image') {
         if (dropIcon) dropIcon.textContent = '📸';
         if (dropTitle) dropTitle.textContent = 'Drop Screenshot (PNG/JPG) here';
-        if (dropSub) dropSub.textContent = 'or take a photo / select from photo library';
+        if (dropSub) dropSub.textContent = 'or tap to choose from camera / photo library';
         if (fileInput) fileInput.accept = 'image/png,image/jpeg,image/webp';
       } else {
-        if (dropIcon) dropIcon.textContent = '📄';
+        if (dropIcon) dropIcon.textContent = '📑';
         if (dropTitle) dropTitle.textContent = 'Drop PDF E-Ticket or Boarding Pass here';
-        if (dropSub) dropSub.textContent = 'or click to browse PDF files';
+        if (dropSub) dropSub.textContent = 'or tap to browse PDF documents';
         if (fileInput) fileInput.accept = 'application/pdf';
       }
     }
@@ -1307,6 +1307,9 @@ class SkyLogApp {
     const fileZone = document.getElementById('smart-modal-file-zone');
     const textZone = document.getElementById('smart-modal-text-zone');
     const fileInput = document.getElementById('smart-modal-file-input');
+    const dropIcon = fileZone ? fileZone.querySelector('.drop-icon') : null;
+    const dropTitle = fileZone ? fileZone.querySelector('h4') : null;
+    const dropSub = fileZone ? fileZone.querySelector('p') : null;
 
     if (mode === 'text') {
       if (fileZone) fileZone.style.display = 'none';
@@ -1314,7 +1317,17 @@ class SkyLogApp {
     } else {
       if (fileZone) fileZone.style.display = 'block';
       if (textZone) textZone.style.display = 'none';
-      if (fileInput) fileInput.accept = mode === 'image' ? 'image/png,image/jpeg,image/webp' : 'application/pdf';
+      if (mode === 'image') {
+        if (dropIcon) dropIcon.textContent = '📸';
+        if (dropTitle) dropTitle.textContent = 'Drop Screenshot (PNG/JPG) here';
+        if (dropSub) dropSub.textContent = 'or tap to browse photos & files';
+        if (fileInput) fileInput.accept = 'image/png,image/jpeg,image/webp';
+      } else {
+        if (dropIcon) dropIcon.textContent = '📑';
+        if (dropTitle) dropTitle.textContent = 'Drop PDF E-Ticket or Boarding Pass here';
+        if (dropSub) dropSub.textContent = 'or tap to browse PDF documents';
+        if (fileInput) fileInput.accept = 'application/pdf';
+      }
     }
   }
 
@@ -1336,8 +1349,10 @@ class SkyLogApp {
         reader.readAsDataURL(file);
       } else {
         if (imgEl) imgEl.style.display = 'none';
-        if (infoEl) infoEl.textContent = `📄 ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
+        if (infoEl) infoEl.textContent = `📑 ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
       }
+      // Auto-extract immediately on selection!
+      setTimeout(() => this.runSmartIngest(), 300);
     } else {
       this.activeSmartModalFile = file;
       const preview = document.getElementById('smart-modal-preview');
@@ -1354,8 +1369,10 @@ class SkyLogApp {
         reader.readAsDataURL(file);
       } else {
         if (imgEl) imgEl.style.display = 'none';
-        if (infoEl) infoEl.textContent = `📄 ${file.name}`;
+        if (infoEl) infoEl.textContent = `📑 ${file.name}`;
       }
+      // Auto-extract immediately on selection!
+      setTimeout(() => this.runSmartModalIngest(), 300);
     }
   }
 
@@ -1364,8 +1381,10 @@ class SkyLogApp {
     this.activeSmartFile = null;
     const preview = document.getElementById('smart-file-preview');
     const input = document.getElementById('smart-file-input');
+    const res = document.getElementById('smart-extracted-results');
     if (preview) preview.style.display = 'none';
     if (input) input.value = '';
+    if (res) res.style.display = 'none';
   }
 
   clearSmartModalFile(e) {
@@ -1373,8 +1392,10 @@ class SkyLogApp {
     this.activeSmartModalFile = null;
     const preview = document.getElementById('smart-modal-preview');
     const input = document.getElementById('smart-modal-file-input');
+    const res = document.getElementById('smart-modal-extracted-results');
     if (preview) preview.style.display = 'none';
     if (input) input.value = '';
+    if (res) res.style.display = 'none';
   }
 
   async runSmartIngest() {
@@ -1383,7 +1404,10 @@ class SkyLogApp {
     const activeTab = document.querySelector('.smart-mode-tabs .smart-tab-btn.active')?.dataset.smartMode || 'image';
 
     if (btn) { btn.disabled = true; btn.textContent = '🧠 Extracting flight details...'; }
-    if (resultsContainer) { resultsContainer.style.display = 'block'; resultsContainer.innerHTML = '<div class="text-center p-3 text-cyan">Scanning itinerary & extracting flight segments...</div>'; }
+    if (resultsContainer) { 
+      resultsContainer.style.display = 'block'; 
+      resultsContainer.innerHTML = '<div class="text-center p-3 text-cyan animate-pulse">🧠 Scanning itinerary & extracting flight segments...</div>'; 
+    }
 
     try {
       let extracted = [];
@@ -1402,7 +1426,24 @@ class SkyLogApp {
       this.renderSmartResults(extracted, 'smart-extracted-results');
     } catch (err) {
       if (resultsContainer) {
-        resultsContainer.innerHTML = `<div class="alert alert-danger">⚠️ ${err.message}</div>`;
+        if (err.message === 'API_KEY_REQUIRED') {
+          resultsContainer.innerHTML = `
+            <div class="alert alert-warning p-3">
+              <div class="flex items-center gap-2 font-bold mb-1">
+                <span>🔑</span>
+                <span>Gemini API Key Required for Screenshot Scanning</span>
+              </div>
+              <p class="text-xs text-muted mb-2">Screenshot extraction uses Gemini Flash Vision. Enter your free Google AI Studio key:</p>
+              <div class="flex gap-2">
+                <input type="password" id="inline-gemini-key-io" class="form-control form-control-sm" placeholder="AIzaSy...">
+                <button class="btn btn-primary btn-sm" onclick="window.app.saveInlineGeminiKey('io')">Save & Extract</button>
+              </div>
+              <small class="text-muted text-xs mt-2 block">Get a free key in 10s from <a href="https://aistudio.google.com/apikey" target="_blank" class="text-cyan underline font-semibold">Google AI Studio</a>. Saved locally in your browser.</small>
+            </div>
+          `;
+        } else {
+          resultsContainer.innerHTML = `<div class="alert alert-danger">⚠️ ${err.message}</div>`;
+        }
       }
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = '✨ Extract Flight Details'; }
@@ -1415,7 +1456,10 @@ class SkyLogApp {
     const activeTab = document.querySelector('#smart-ingest-modal .smart-tab-btn.active')?.dataset.smartModalMode || 'image';
 
     if (btn) { btn.disabled = true; btn.textContent = '🧠 Extracting...'; }
-    if (resultsContainer) { resultsContainer.style.display = 'block'; resultsContainer.innerHTML = '<div class="text-center p-3 text-cyan">Parsing flight details...</div>'; }
+    if (resultsContainer) { 
+      resultsContainer.style.display = 'block'; 
+      resultsContainer.innerHTML = '<div class="text-center p-3 text-cyan animate-pulse">🧠 Parsing flight details...</div>'; 
+    }
 
     try {
       let extracted = [];
@@ -1434,10 +1478,39 @@ class SkyLogApp {
       this.renderSmartResults(extracted, 'smart-modal-extracted-results');
     } catch (err) {
       if (resultsContainer) {
-        resultsContainer.innerHTML = `<div class="alert alert-danger">⚠️ ${err.message}</div>`;
+        if (err.message === 'API_KEY_REQUIRED') {
+          resultsContainer.innerHTML = `
+            <div class="alert alert-warning p-3">
+              <div class="flex items-center gap-2 font-bold mb-1">
+                <span>🔑</span>
+                <span>Gemini API Key Required for Screenshot Vision</span>
+              </div>
+              <p class="text-xs text-muted mb-2">Screenshot extraction uses Gemini Flash Vision. Enter your free Google AI Studio key:</p>
+              <div class="flex gap-2">
+                <input type="password" id="inline-gemini-key-modal" class="form-control form-control-sm" placeholder="AIzaSy...">
+                <button class="btn btn-primary btn-sm" onclick="window.app.saveInlineGeminiKey('modal')">Save & Extract</button>
+              </div>
+              <small class="text-muted text-xs mt-2 block">Get a free key in 10s from <a href="https://aistudio.google.com/apikey" target="_blank" class="text-cyan underline font-semibold">Google AI Studio</a>. Saved locally in your browser.</small>
+            </div>
+          `;
+        } else {
+          resultsContainer.innerHTML = `<div class="alert alert-danger">⚠️ ${err.message}</div>`;
+        }
       }
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = '✨ Extract Flights'; }
+    }
+  }
+
+  saveInlineGeminiKey(context) {
+    const input = document.getElementById(`inline-gemini-key-${context}`);
+    if (input && input.value.trim()) {
+      this.smartIngest.setApiKey(input.value.trim());
+      if (context === 'modal') {
+        this.runSmartModalIngest();
+      } else {
+        this.runSmartIngest();
+      }
     }
   }
 

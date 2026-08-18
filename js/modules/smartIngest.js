@@ -60,7 +60,7 @@ export class SmartIngestEngine {
         const base64Data = reader.result;
         const key = this.getApiKey();
         if (!key) {
-          reject(new Error('To extract flight details from screenshots, please enter your Gemini API Key in the settings below (free from Google AI Studio).'));
+          reject(new Error('API_KEY_REQUIRED'));
           return;
         }
 
