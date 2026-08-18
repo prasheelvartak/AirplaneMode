@@ -1,6 +1,6 @@
 # ✈️ AirplaneMode — Personal Flight Intelligence & Route Analytics
 
-**AirplaneMode** is an interactive, dark/light luxury flight tracking and route intelligence web application. Designed for frequent flyers, aviation enthusiasts, and travelers to visualize great-circle routes, analyze fleet statistics, and import/export `myflightradar24` logbooks.
+**AirplaneMode** is an interactive personal flight tracking and route intelligence web application. Designed for frequent flyers, aviation enthusiasts, and travelers to visualize great-circle routes, analyze fleet statistics, and import/export `myflightradar24` logbooks.
 
 ![AirplaneMode Banner](https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1200&q=80)
 

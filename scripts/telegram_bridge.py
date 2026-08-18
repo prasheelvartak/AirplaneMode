@@ -173,7 +173,7 @@ def handle_ai_prompt(chat_id, user_prompt):
         orig_js = f.read()
 
     system_instruction = (
-        "You are an expert AI software engineer for the AirplaneMode luxury flight tracking web application.\n"
+        "You are an expert AI software engineer for the AirplaneMode flight tracking and route intelligence web application.\n"
         "DO NOT rewrite entire files. Instead, return SURGICAL FIND-AND-REPLACE modifications so no existing styles or features get deleted.\n"
         "Return a JSON object with this schema:\n"
         "{\n"
