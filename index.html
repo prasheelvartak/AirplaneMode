@@ -439,7 +439,7 @@
                   <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="window.app.clearSmartFile(event)">Remove</button>
                 </div>
               </div>
-              <input type="file" id="smart-file-input" accept="image/png,image/jpeg,image/webp,application/pdf" style="display: none;">
+              <input type="file" id="smart-file-input" onchange="window.app.onFileInputChanged(this, 'io')" accept="image/*,application/pdf,.pdf,.png,.jpg,.jpeg,.heic,.webp" style="display: none;">
 
               <!-- Mode 3: Raw Text Paste -->
               <div id="smart-text-zone" class="smart-text-zone" style="display: none;">
@@ -748,7 +748,7 @@
             <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="window.app.clearSmartModalFile(event)">Remove</button>
           </div>
         </div>
-        <input type="file" id="smart-modal-file-input" accept="image/png,image/jpeg,image/webp,application/pdf" style="display: none;">
+        <input type="file" id="smart-modal-file-input" onchange="window.app.onFileInputChanged(this, 'modal')" accept="image/*,application/pdf,.pdf,.png,.jpg,.jpeg,.heic,.webp" style="display: none;">
 
         <div id="smart-modal-text-zone" class="smart-text-zone" style="display: none;">
           <textarea id="smart-modal-text-input" class="form-control" rows="5" placeholder="Paste booking confirmation email text..."></textarea>

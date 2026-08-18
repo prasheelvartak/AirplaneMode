@@ -114,7 +114,7 @@ export class SmartIngestEngine {
     const key = this.getApiKey();
     if (!key) throw new Error('No Gemini API key provided');
 
-    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.6-flash'];
+    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     const parts = [];
 
     const systemPrompt = `
@@ -166,7 +166,10 @@ export class SmartIngestEngine {
 
         const data = await res.json();
         if (res.ok && data.candidates && data.candidates.length > 0) {
-          const raw = data.candidates[0].content.parts[0].text;
+          let raw = data.candidates[0].content.parts[0].text.trim();
+          if (raw.startsWith('```')) {
+            raw = raw.replace(/^```[a-z]*\s*/i, '').replace(/```\s*$/i, '').trim();
+          }
           const parsed = JSON.parse(raw);
           const flightList = Array.isArray(parsed) ? parsed : (parsed.flights || [parsed]);
           return this.normalizeExtractedFlights(flightList);

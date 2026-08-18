@@ -1222,8 +1222,15 @@ class SkyLogApp {
     const id = context === 'modal' ? 'smart-modal-file-input' : 'smart-file-input';
     const input = document.getElementById(id);
     if (input) {
-      input.value = '';
       input.click();
+    }
+  }
+
+  onFileInputChanged(inputEl, context) {
+    if (inputEl && inputEl.files && inputEl.files[0]) {
+      const file = inputEl.files[0];
+      this.handleSmartFileSelected(file, context);
+      inputEl.value = '';
     }
   }
 
@@ -1232,11 +1239,6 @@ class SkyLogApp {
     const smartZone = document.getElementById('smart-file-zone');
     const smartInput = document.getElementById('smart-file-input');
     if (smartZone && smartInput) {
-      smartInput.addEventListener('change', (e) => {
-        if (e.target.files && e.target.files[0]) {
-          this.handleSmartFileSelected(e.target.files[0], 'io');
-        }
-      });
       smartZone.addEventListener('dragover', (e) => { e.preventDefault(); smartZone.classList.add('drag-over'); });
       smartZone.addEventListener('dragleave', () => smartZone.classList.remove('drag-over'));
       smartZone.addEventListener('drop', (e) => {
@@ -1252,11 +1254,6 @@ class SkyLogApp {
     const modalZone = document.getElementById('smart-modal-file-zone');
     const modalInput = document.getElementById('smart-modal-file-input');
     if (modalZone && modalInput) {
-      modalInput.addEventListener('change', (e) => {
-        if (e.target.files && e.target.files[0]) {
-          this.handleSmartFileSelected(e.target.files[0], 'modal');
-        }
-      });
       modalZone.addEventListener('dragover', (e) => { e.preventDefault(); modalZone.classList.add('drag-over'); });
       modalZone.addEventListener('dragleave', () => modalZone.classList.remove('drag-over'));
       modalZone.addEventListener('drop', (e) => {
@@ -1290,12 +1287,12 @@ class SkyLogApp {
         if (dropIcon) dropIcon.textContent = '📸';
         if (dropTitle) dropTitle.textContent = 'Drop Screenshot (PNG/JPG) here';
         if (dropSub) dropSub.textContent = 'or tap to choose from camera / photo library';
-        if (fileInput) fileInput.accept = 'image/png,image/jpeg,image/webp';
+        if (fileInput) fileInput.accept = 'image/*,.png,.jpg,.jpeg,.heic,.webp';
       } else {
         if (dropIcon) dropIcon.textContent = '📑';
         if (dropTitle) dropTitle.textContent = 'Drop PDF E-Ticket or Boarding Pass here';
         if (dropSub) dropSub.textContent = 'or tap to browse PDF documents';
-        if (fileInput) fileInput.accept = 'application/pdf';
+        if (fileInput) fileInput.accept = 'application/pdf,.pdf';
       }
     }
   }
@@ -1321,18 +1318,21 @@ class SkyLogApp {
         if (dropIcon) dropIcon.textContent = '📸';
         if (dropTitle) dropTitle.textContent = 'Drop Screenshot (PNG/JPG) here';
         if (dropSub) dropSub.textContent = 'or tap to browse photos & files';
-        if (fileInput) fileInput.accept = 'image/png,image/jpeg,image/webp';
+        if (fileInput) fileInput.accept = 'image/*,.png,.jpg,.jpeg,.heic,.webp';
       } else {
         if (dropIcon) dropIcon.textContent = '📑';
         if (dropTitle) dropTitle.textContent = 'Drop PDF E-Ticket or Boarding Pass here';
         if (dropSub) dropSub.textContent = 'or tap to browse PDF documents';
-        if (fileInput) fileInput.accept = 'application/pdf';
+        if (fileInput) fileInput.accept = 'application/pdf,.pdf';
       }
     }
   }
 
   handleSmartFileSelected(file, context = 'io') {
     if (!file) return;
+    const isImage = (file.type && file.type.startsWith('image/')) || 
+                    /\.(png|jpe?g|webp|heic|heif|bmp|gif|svg)$/i.test(file.name);
+
     if (context === 'io') {
       this.activeSmartFile = file;
       const preview = document.getElementById('smart-file-preview');
@@ -1340,7 +1340,7 @@ class SkyLogApp {
       const infoEl = document.getElementById('smart-preview-info');
 
       if (preview) preview.style.display = 'block';
-      if (file.type.startsWith('image/')) {
+      if (isImage) {
         const reader = new FileReader();
         reader.onload = (e) => {
           if (imgEl) { imgEl.src = e.target.result; imgEl.style.display = 'block'; }
@@ -1351,7 +1351,13 @@ class SkyLogApp {
         if (imgEl) imgEl.style.display = 'none';
         if (infoEl) infoEl.textContent = `📑 ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
       }
-      // Auto-extract immediately on selection!
+
+      // Show immediate status & trigger extraction
+      const resultsContainer = document.getElementById('smart-extracted-results');
+      if (resultsContainer) {
+        resultsContainer.style.display = 'block';
+        resultsContainer.innerHTML = '<div class="text-center p-3 text-cyan animate-pulse">⚡ Image loaded! Extracting flight details...</div>';
+      }
       setTimeout(() => this.runSmartIngest(), 300);
     } else {
       this.activeSmartModalFile = file;
@@ -1360,7 +1366,7 @@ class SkyLogApp {
       const infoEl = document.getElementById('smart-modal-preview-info');
 
       if (preview) preview.style.display = 'block';
-      if (file.type.startsWith('image/')) {
+      if (isImage) {
         const reader = new FileReader();
         reader.onload = (e) => {
           if (imgEl) { imgEl.src = e.target.result; imgEl.style.display = 'block'; }
@@ -1371,7 +1377,13 @@ class SkyLogApp {
         if (imgEl) imgEl.style.display = 'none';
         if (infoEl) infoEl.textContent = `📑 ${file.name}`;
       }
-      // Auto-extract immediately on selection!
+
+      // Show immediate status & trigger extraction
+      const resultsContainer = document.getElementById('smart-modal-extracted-results');
+      if (resultsContainer) {
+        resultsContainer.style.display = 'block';
+        resultsContainer.innerHTML = '<div class="text-center p-3 text-cyan animate-pulse">⚡ Image loaded! Extracting flight details...</div>';
+      }
       setTimeout(() => this.runSmartModalIngest(), 300);
     }
   }
