@@ -74,8 +74,8 @@ export class AircraftRegistryView {
       }
     }
 
-    const sortedTypes = Array.from(typesMap.values()).sort((a, b) => b.flightCount - a.count);
-    const sortedRegs = Array.from(regMap.values()).sort((a, b) => b.flightCount - a.count);
+    const sortedTypes = Array.from(typesMap.values()).sort((a, b) => b.flightCount - a.flightCount);
+    const sortedRegs = Array.from(regMap.values()).sort((a, b) => b.flightCount - a.flightCount);
 
     container.innerHTML = `
       <div class="aircraft-view-wrapper">

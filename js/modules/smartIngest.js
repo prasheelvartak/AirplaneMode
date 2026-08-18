@@ -6,7 +6,8 @@
 
 import { lookupFlightSchedule } from '../data/flightSchedules.js';
 import { getAirport, calculateDistance } from '../data/airports.js';
-import { AIRLINES, extractAirlineCode } from '../data/aircraft.js';
+import { AIRLINES, extractAirlineCode, extractAircraftCode } from '../data/aircraft.js';
+import { SEAT_TYPES, FLIGHT_CLASSES, FLIGHT_REASONS, parseDurationMinutes, formatMinutes } from './parser.js';
 
 export class SmartIngestEngine {
   constructor(store, app) {
@@ -355,41 +356,90 @@ export class SmartIngestEngine {
    * Normalize and enhance extracted flight segments with coordinates, distances, and airport metadata
    */
   normalizeExtractedFlights(flights) {
-    return flights.map(f => {
-      const fromAp = getAirport(f.fromCode);
-      const toAp = getAirport(f.toCode);
-      const distObj = (fromAp && toAp) ? calculateDistance(fromAp.lat, fromAp.lon, toAp.lat, toAp.lon) : { km: 3500 };
-      const dist = distObj.km || 3500;
+    return flights.map((f, idx) => {
+      const fromCode = (f.fromCode || 'DFW').toUpperCase().trim();
+      const toCode = (f.toCode || 'LHR').toUpperCase().trim();
+      const fromAp = getAirport(fromCode) || { code: fromCode, name: fromCode, city: fromCode, country: '', countryCode: '', lat: 0, lon: 0 };
+      const toAp = getAirport(toCode) || { code: toCode, name: toCode, city: toCode, country: '', countryCode: '', lat: 0, lon: 0 };
+      
+      let distKm = 0;
+      let distMi = 0;
+      let distNm = 0;
+      if (fromAp.lat && toAp.lat) {
+        const d = calculateDistance(fromAp.lat, fromAp.lon, toAp.lat, toAp.lon);
+        distKm = d.km;
+        distMi = d.mi;
+        distNm = d.nm;
+      } else {
+        distKm = f.distanceKm || 3500;
+        distMi = Math.round(distKm * 0.621371);
+        distNm = Math.round(distKm * 0.539957);
+      }
+
+      // Duration calculation
+      let durationRaw = f.duration || f.durationRaw || '';
+      let durationMins = parseDurationMinutes(durationRaw);
+      if (durationMins === 0 && distKm > 0) {
+        durationMins = Math.round((distKm / 780) * 60 + 30);
+        durationRaw = formatMinutes(durationMins);
+      }
 
       // Class mapping
       let flightClassNum = 1;
-      const fc = (f.flightClass || '').toLowerCase();
-      if (fc.includes('first')) flightClassNum = 4;
-      else if (fc.includes('biz') || fc.includes('business')) flightClassNum = 3;
-      else if (fc.includes('prem')) flightClassNum = 2;
+      const fc = String(f.flightClass || '').toLowerCase();
+      if (fc.includes('4') || fc.includes('first')) flightClassNum = 4;
+      else if (fc.includes('3') || fc.includes('biz') || fc.includes('business')) flightClassNum = 3;
+      else if (fc.includes('2') || fc.includes('prem')) flightClassNum = 2;
+      else if (fc.includes('1') || fc.includes('eco')) flightClassNum = 1;
+
+      const flightNum = (f.flightNumber || 'FL' + Math.floor(100 + Math.random() * 900)).toUpperCase().replace(/\s+/g, '');
+      const airlineCode = extractAirlineCode(f.airline || flightNum.slice(0, 2)) || flightNum.slice(0, 2);
+      const airlineRaw = f.airline || (AIRLINES[airlineCode] ? AIRLINES[airlineCode].name : 'Commercial Airline');
+      const aircraftRaw = f.aircraft || f.aircraftRaw || 'Airbus A320 / Boeing 737';
+      const aircraftCode = extractAircraftCode(aircraftRaw);
+
+      const seatNum = f.seat || f.seatNumber || '';
+      let seatType = 0;
+      if (seatNum) {
+        const lastChar = seatNum.slice(-1).toUpperCase();
+        if (['A', 'F', 'K'].includes(lastChar)) seatType = 1; // Window
+        else if (['B', 'E', 'J'].includes(lastChar)) seatType = 2; // Middle
+        else if (['C', 'D', 'G', 'H'].includes(lastChar)) seatType = 3; // Aisle
+      }
+
+      const dateStr = f.date || new Date().toISOString().split('T')[0];
 
       return {
-        id: 'flight_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-        date: f.date || new Date().toISOString().split('T')[0],
-        flightNumber: (f.flightNumber || 'FL000').toUpperCase().replace(/\s+/g, ''),
-        fromCode: (f.fromCode || 'DFW').toUpperCase(),
-        toCode: (f.toCode || 'LHR').toUpperCase(),
-        fromAirport: fromAp || { name: f.fromCode, city: f.fromCode, country: '', lat: 0, lon: 0 },
-        toAirport: toAp || { name: f.toCode, city: f.toCode, country: '', lat: 0, lon: 0 },
+        id: `fl_${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 6)}`,
+        date: dateStr,
+        flightNumber: flightNum,
+        fromRaw: fromAp.city ? `${fromAp.city} (${fromCode})` : fromCode,
+        toRaw: toAp.city ? `${toAp.city} (${toCode})` : toCode,
+        fromCode: fromCode,
+        toCode: toCode,
+        fromAirport: fromAp,
+        toAirport: toAp,
         depTime: f.depTime || '10:00:00',
         arrTime: f.arrTime || '18:00:00',
-        duration: f.duration || '08:00:00',
-        airlineRaw: f.airline || (AIRLINES[f.flightNumber?.slice(0, 2)] ? AIRLINES[f.flightNumber?.slice(0, 2)].name : 'Commercial Airline'),
-        airlineCode: f.flightNumber?.slice(0, 2) || 'XX',
-        aircraftRaw: f.aircraft || 'Commercial Aircraft',
-        aircraftCode: f.aircraftCode || '',
+        durationRaw: durationRaw,
+        durationMinutes: durationMins,
+        distanceKm: Math.round(distKm),
+        distanceMiles: Math.round(distMi),
+        distanceNm: Math.round(distNm),
+        airlineRaw: airlineRaw,
+        airlineCode: airlineCode,
+        aircraftRaw: aircraftRaw,
+        aircraftCode: aircraftCode,
         registration: f.registration || '',
-        seatNumber: f.seat || '',
-        seatType: 1,
+        seatNumber: seatNum,
+        seatType: seatType,
+        seatTypeLabel: SEAT_TYPES[seatType] || "Unspecified",
         flightClass: flightClassNum,
+        flightClassLabel: FLIGHT_CLASSES[flightClassNum] || "Economy",
         flightReason: 1,
-        distanceKm: Math.round(dist),
-        note: f.note || 'Imported via Smart Import'
+        flightReasonLabel: FLIGHT_REASONS[1] || "Leisure",
+        note: f.note || 'Imported via Smart Import',
+        isFuture: new Date(dateStr).getTime() > Date.now()
       };
     });
   }

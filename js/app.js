@@ -449,23 +449,27 @@ class SkyLogApp {
     // Flight Extremes
     const extremesContainer = document.getElementById('analytics-flight-extremes');
     if (extremesContainer) {
+      const distStr = stats.longestFlightDist ? `${(stats.longestFlightDist.distanceKm || 0).toLocaleString()} km (${stats.longestFlightDist.flightNumber || '—'})` : '—';
+      const shortDistStr = stats.shortestFlightDist ? `${(stats.shortestFlightDist.distanceKm || 0).toLocaleString()} km (${stats.shortestFlightDist.flightNumber || '—'})` : '—';
+      const durStr = stats.longestFlightDur ? `${stats.longestFlightDur.durationRaw || (stats.longestFlightDur.durationMinutes ? `${Math.floor(stats.longestFlightDur.durationMinutes/60)}h ${stats.longestFlightDur.durationMinutes%60}m` : '—')} (${stats.longestFlightDur.flightNumber || '—'})` : '—';
+
       extremesContainer.innerHTML = `
         <div class="extremes-grid">
           <div class="extreme-card">
             <span class="ex-lbl">Longest Flight (Distance)</span>
             <strong>${stats.longestFlightDist ? `${stats.longestFlightDist.fromCode} ➔ ${stats.longestFlightDist.toCode}` : '—'}</strong>
-            <span class="ex-val">${stats.longestFlightDist ? `${stats.longestFlightDist.distanceKm.toLocaleString()} km (${stats.longestFlightDist.flightNumber})` : '—'}</span>
+            <span class="ex-val">${distStr}</span>
             <small>${stats.longestFlightDist?.note || ''}</small>
           </div>
           <div class="extreme-card">
             <span class="ex-lbl">Shortest Flight (Distance)</span>
             <strong>${stats.shortestFlightDist ? `${stats.shortestFlightDist.fromCode} ➔ ${stats.shortestFlightDist.toCode}` : '—'}</strong>
-            <span class="ex-val">${stats.shortestFlightDist ? `${stats.shortestFlightDist.distanceKm.toLocaleString()} km (${stats.shortestFlightDist.flightNumber})` : '—'}</span>
+            <span class="ex-val">${shortDistStr}</span>
           </div>
           <div class="extreme-card">
             <span class="ex-lbl">Longest Air Duration</span>
             <strong>${stats.longestFlightDur ? `${stats.longestFlightDur.fromCode} ➔ ${stats.longestFlightDur.toCode}` : '—'}</strong>
-            <span class="ex-val">${stats.longestFlightDur ? `${stats.longestFlightDur.durationRaw} (${stats.longestFlightDur.flightNumber})` : '—'}</span>
+            <span class="ex-val">${durStr}</span>
           </div>
         </div>
       `;
@@ -1649,18 +1653,49 @@ class SkyLogApp {
     item[field] = value;
 
     if (field === 'flightNumber') {
-      item.airlineCode = value.slice(0, 2).toUpperCase();
+      const fn = (value || '').toUpperCase().replace(/\s+/g, '');
+      item.flightNumber = fn;
+      item.airlineCode = fn.slice(0, 2);
       item.airlineRaw = AIRLINES[item.airlineCode]?.name || item.airlineRaw || 'Commercial Airline';
     }
 
     if (field === 'fromCode' || field === 'toCode') {
-      const fromAp = getAirport(item.fromCode);
-      const toAp = getAirport(item.toCode);
-      if (fromAp) item.fromAirport = fromAp;
-      if (toAp) item.toAirport = toAp;
-      if (fromAp && toAp) {
-        item.distanceKm = calculateDistance(fromAp.lat, fromAp.lon, toAp.lat, toAp.lon).km;
+      item.fromCode = (item.fromCode || '').toUpperCase().trim();
+      item.toCode = (item.toCode || '').toUpperCase().trim();
+      const fromAp = getAirport(item.fromCode) || { code: item.fromCode, name: item.fromCode, city: item.fromCode, country: '', countryCode: '', lat: 0, lon: 0 };
+      const toAp = getAirport(item.toCode) || { code: item.toCode, name: item.toCode, city: item.toCode, country: '', countryCode: '', lat: 0, lon: 0 };
+      item.fromAirport = fromAp;
+      item.toAirport = toAp;
+      item.fromRaw = fromAp.city ? `${fromAp.city} (${item.fromCode})` : item.fromCode;
+      item.toRaw = toAp.city ? `${toAp.city} (${item.toCode})` : item.toCode;
+      if (fromAp.lat && toAp.lat) {
+        const d = calculateDistance(fromAp.lat, fromAp.lon, toAp.lat, toAp.lon);
+        item.distanceKm = Math.round(d.km);
+        item.distanceMiles = Math.round(d.mi);
+        item.distanceNm = Math.round(d.nm);
       }
+    }
+
+    if (field === 'date') {
+      item.isFuture = new Date(value).getTime() > Date.now();
+    }
+
+    if (field === 'flightClass') {
+      const clsNum = parseInt(value) || 1;
+      item.flightClass = clsNum;
+      item.flightClassLabel = FLIGHT_CLASSES[clsNum] || 'Economy';
+    }
+
+    if (field === 'seatNumber') {
+      let seatType = 0;
+      if (value) {
+        const lastChar = String(value).slice(-1).toUpperCase();
+        if (['A', 'F', 'K'].includes(lastChar)) seatType = 1;
+        else if (['B', 'E', 'J'].includes(lastChar)) seatType = 2;
+        else if (['C', 'D', 'G', 'H'].includes(lastChar)) seatType = 3;
+      }
+      item.seatType = seatType;
+      item.seatTypeLabel = SEAT_TYPES[seatType] || 'Unspecified';
     }
   }
 
