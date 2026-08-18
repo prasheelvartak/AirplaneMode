@@ -2883,32 +2883,63 @@ html, body {
 
 @media (max-width: 900px) {
   .header-kpi-bar {
-    display: none !important;
+    display: flex !important;
+    padding: 3px 10px;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.28);
+    border-radius: var(--radius-full);
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  .header-kpi-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .h-kpi {
+    font-size: 0.72rem;
+    gap: 4px;
+  }
+
+  .h-kpi .kpi-label {
+    font-size: 0.65rem;
+  }
+
+  .h-kpi .kpi-value {
+    font-size: 0.75rem;
+  }
+
+  .h-kpi-sep {
+    height: 10px;
   }
 }
 
 @media (max-width: 768px) {
   /* Header adjustments */
   .app-header {
-    padding: 10px 14px;
-    gap: 8px;
+    padding: 8px 12px;
+    gap: 6px 10px;
+    flex-wrap: wrap;
   }
 
   .brand-section {
     gap: 8px;
-    flex-shrink: 1;
+    flex: 1 1 auto;
     min-width: 0;
   }
 
   .brand-logo {
-    width: 32px;
-    height: 32px;
-    font-size: 16px;
+    width: 30px;
+    height: 30px;
+    font-size: 15px;
     flex-shrink: 0;
   }
 
   .brand-text h1 {
-    font-size: 1.05rem;
+    font-size: 1rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2920,6 +2951,7 @@ html, body {
 
   .header-actions {
     gap: 6px;
+    flex: 0 0 auto;
   }
 
   .header-actions .btn-secondary {
@@ -2927,20 +2959,33 @@ html, body {
   }
 
   .header-actions .btn-primary {
-    padding: 6px 12px;
-    font-size: 0.78rem;
+    padding: 5px 10px;
+    font-size: 0.75rem;
     white-space: nowrap;
   }
 
+  .header-actions .btn-smart {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+  }
+
   .theme-toggle-btn {
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .header-kpi-bar {
+    width: 100%;
+    flex: 1 1 100%;
+    margin-top: 2px;
+    padding: 3px 8px;
+    justify-content: space-around;
   }
 
   /* Navigation tab bar */
   .nav-tab-bar {
-    padding: 6px 12px;
+    padding: 5px 10px;
     gap: 4px;
     overflow-x: auto;
     scrollbar-width: none;
@@ -2952,24 +2997,30 @@ html, body {
   }
 
   .nav-tab-btn {
-    padding: 6px 10px;
-    font-size: 0.75rem;
+    padding: 5px 9px;
+    font-size: 0.72rem;
   }
 
   /* Map View adjustments */
   #tab-map {
-    height: calc(100vh - 100px);
+    position: relative;
+    height: calc(100dvh - 128px);
+    min-height: 440px;
+    overflow: hidden;
   }
 
   .map-floating-overlay {
-    top: 10px;
-    left: 10px;
+    top: 12px;
+    left: 12px;
     width: auto;
-    max-width: calc(100vw - 20px);
+    max-width: calc(100vw - 24px);
+    z-index: 600;
   }
 
   .map-mobile-toggle-btn {
     display: inline-flex !important;
+    pointer-events: auto !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   }
 
   .map-card-close-mobile-btn {
@@ -3002,9 +3053,9 @@ html, body {
     position: absolute;
     top: 44px;
     left: 0;
-    width: calc(100vw - 20px);
-    max-width: 330px;
-    z-index: 600;
+    width: calc(100vw - 24px);
+    max-width: 320px;
+    z-index: 700;
     animation: fadeIn 0.2s ease forwards;
   }
 

@@ -31,13 +31,15 @@ export class FlightMap {
     this.currentTheme = initialTheme;
     this.currentBasemap = initialTheme === 'light' ? 'light' : 'dark';
 
-    // Initialize Leaflet map with global view
+    // Initialize Leaflet map with bounded global view (locks world bounds, zero black void)
     this.map = L.map(this.containerId, {
-      center: [30, 0],
-      zoom: 2.3,
-      minZoom: 1.8,
+      center: [25, 0],
+      zoom: 2.2,
+      minZoom: 1.9,
       maxZoom: 12,
-      worldCopyJump: true,
+      maxBounds: [[-85, -180], [85, 180]],
+      maxBoundsViscosity: 1.0,
+      worldCopyJump: false,
       zoomControl: false,
       attributionControl: false
     });
