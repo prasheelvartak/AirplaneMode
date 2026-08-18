@@ -197,6 +197,13 @@ class SkyLogApp {
     this.map.setFlights(flights);
     this.populateMapAirlineFilter(flights);
 
+    // Update map pill count dynamically to match total flights in logbook
+    const pillEl = document.getElementById('map-active-routes-pill');
+    const mobilePillEl = document.getElementById('map-mobile-pill');
+    const flightCountText = `${flights.length} Flight${flights.length === 1 ? '' : 's'}`;
+    if (pillEl) pillEl.textContent = flightCountText;
+    if (mobilePillEl) mobilePillEl.textContent = flightCountText;
+
     // 2. Update Flight Log Manager
     this.flightManager.setFlights(flights);
 

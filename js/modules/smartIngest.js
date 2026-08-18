@@ -253,6 +253,78 @@ export class SmartIngestEngine {
   }
 
   /**
+   * Robust Date Extractor for Airline Boarding Passes, Confirmations, and Screenshots
+   * Handles "14 Aug", "Aug 14, 2024", "14AUG24", "14-AUG-2024", "14/08/2024", "2024-08-14"
+   */
+  extractDatesFromText(text) {
+    const dates = [];
+    const monthMap = {
+      jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+      jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+      january: '01', february: '02', march: '03', april: '04', june: '06',
+      july: '07', august: '08', september: '09', october: '10', november: '11', december: '12'
+    };
+
+    const currentYear = new Date().getFullYear();
+
+    // Pattern 1: "14 Aug 2024" or "14 Aug" or "14AUG24" or "14-AUG-2024" or "14AUG"
+    const d1Regex = /\b([0-3]?\d)\s*[-/.\s]?\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*(?:\s*[-/,\s]?\s*(\d{2,4}))?\b/gi;
+    let m1;
+    while ((m1 = d1Regex.exec(text)) !== null) {
+      const day = m1[1].padStart(2, '0');
+      const monStr = m1[2].toLowerCase();
+      const mon = monthMap[monStr];
+      let yr = m1[3] ? (m1[3].length === 2 ? `20${m1[3]}` : m1[3]) : `${currentYear}`;
+      if (parseInt(day) >= 1 && parseInt(day) <= 31 && mon) {
+        dates.push(`${yr}-${mon}-${day}`);
+      }
+    }
+
+    // Pattern 2: "Aug 14, 2024" or "Aug 14" or "August 14"
+    const d2Regex = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+([0-3]?\d)(?:st|nd|rd|th)?(?:\s*[-/,\s]?\s*(\d{2,4}))?\b/gi;
+    let m2;
+    while ((m2 = d2Regex.exec(text)) !== null) {
+      const monStr = m2[1].toLowerCase();
+      const mon = monthMap[monStr];
+      const day = m2[2].padStart(2, '0');
+      let yr = m2[3] ? (m2[3].length === 2 ? `20${m2[3]}` : m2[3]) : `${currentYear}`;
+      if (parseInt(day) >= 1 && parseInt(day) <= 31 && mon) {
+        dates.push(`${yr}-${mon}-${day}`);
+      }
+    }
+
+    // Pattern 3: ISO "YYYY-MM-DD" or "YYYY/MM/DD"
+    const d3Regex = /\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/g;
+    let m3;
+    while ((m3 = d3Regex.exec(text)) !== null) {
+      const yr = m3[1];
+      const mon = m3[2].padStart(2, '0');
+      const day = m3[3].padStart(2, '0');
+      if (parseInt(mon) >= 1 && parseInt(mon) <= 12 && parseInt(day) >= 1 && parseInt(day) <= 31) {
+        dates.push(`${yr}-${mon}-${day}`);
+      }
+    }
+
+    // Pattern 4: "DD/MM/YYYY" or "DD/MM/YY" or "MM/DD/YYYY"
+    const d4Regex = /\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/g;
+    let m4;
+    while ((m4 = d4Regex.exec(text)) !== null) {
+      const p1 = parseInt(m4[1]);
+      const p2 = parseInt(m4[2]);
+      let yr = m4[3].length === 2 ? `20${m4[3]}` : m4[3];
+      if (parseInt(yr) >= 2000 && parseInt(yr) <= 2035) {
+        if (p1 <= 12 && p2 <= 31) {
+          dates.push(`${yr}-${String(p1).padStart(2, '0')}-${String(p2).padStart(2, '0')}`);
+        } else if (p1 <= 31 && p2 <= 12) {
+          dates.push(`${yr}-${String(p2).padStart(2, '0')}-${String(p1).padStart(2, '0')}`);
+        }
+      }
+    }
+
+    return dates;
+  }
+
+  /**
    * Fast Local Heuristic Regex Parser (Works 100% offline with zero API key)
    */
   parseWithHeuristics(text) {
@@ -308,16 +380,8 @@ export class SmartIngestEngine {
       }
     }
 
-    // 3. Extract Dates
-    const dateRegex = /\b(20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20\d{2}|\d{1,2}[-/.]\d{1,2}[-/.]20\d{2})\b/gi;
-    const dates = [];
-    let dMatch;
-    while ((dMatch = dateRegex.exec(cleanText)) !== null) {
-      try {
-        const d = new Date(dMatch[1]);
-        if (!isNaN(d.getTime())) dates.push(d.toISOString().split('T')[0]);
-      } catch (e) {}
-    }
+    // 3. Extract Dates (Supports "14 Aug", "Aug 14, 2024", "14AUG24", "14/08/2024", etc.)
+    const dates = this.extractDatesFromText(cleanText);
 
     // 4. Extract Times
     const timeRegex = /\b([01]?\d|2[0-3]):([0-5]\d)\b/g;
