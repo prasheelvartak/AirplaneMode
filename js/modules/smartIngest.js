@@ -379,7 +379,7 @@ export class SmartIngestEngine {
         depTime: f.depTime || '10:00:00',
         arrTime: f.arrTime || '18:00:00',
         duration: f.duration || '08:00:00',
-        airlineRaw: f.airline || getAirline(f.flightNumber?.slice(0, 2)) || 'Commercial Airline',
+        airlineRaw: f.airline || (AIRLINES[f.flightNumber?.slice(0, 2)] ? AIRLINES[f.flightNumber?.slice(0, 2)].name : 'Commercial Airline'),
         airlineCode: f.flightNumber?.slice(0, 2) || 'XX',
         aircraftRaw: f.aircraft || 'Commercial Aircraft',
         aircraftCode: f.aircraftCode || '',
@@ -389,7 +389,7 @@ export class SmartIngestEngine {
         flightClass: flightClassNum,
         flightReason: 1,
         distanceKm: Math.round(dist),
-        note: f.note || 'Imported via Smart Ingest'
+        note: f.note || 'Imported via Smart Import'
       };
     });
   }

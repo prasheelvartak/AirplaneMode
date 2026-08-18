@@ -1187,6 +1187,18 @@ class SkyLogApp {
     });
   }
 
+  closeModal(modalId) {
+    const modal = typeof modalId === 'string' ? document.getElementById(modalId) : modalId;
+    if (modal) modal.classList.remove('active');
+  }
+
+  openAdvancedSettings() {
+    this.closeModal('smart-ingest-modal');
+    this.switchTab('io');
+    const keyConfig = document.getElementById('smart-key-config');
+    if (keyConfig) keyConfig.style.display = 'block';
+  }
+
   // =========================================================================
   // Smart Ingestion Handlers (Screenshots, PDFs, Pasted Emails)
   // =========================================================================
@@ -1576,17 +1588,20 @@ class SkyLogApp {
   confirmAllSmartFlights(containerId) {
     if (!this.currentSmartExtracted || this.currentSmartExtracted.length === 0) return;
     const count = this.smartIngest.importFlights(this.currentSmartExtracted);
-    alert(`🎉 Successfully added ${count} flight${count > 1 ? 's' : ''} to your AirplaneMode logbook!`);
     
     // Close modal if open
     this.closeModal('smart-ingest-modal');
     
-    // Clear container
+    // Clear container & file state
+    this.clearSmartFile();
+    this.clearSmartModalFile();
     const container = document.getElementById(containerId);
     if (container) container.style.display = 'none';
 
-    // Switch to flight log or map to view
+    // Switch to flight log tab to immediately show the imported flights!
     this.switchTab('flights');
+
+    alert(`🎉 Successfully added ${count} flight${count > 1 ? 's' : ''} to your AirplaneMode logbook!`);
   }
 
   toggleGeminiKeyPrompt() {
